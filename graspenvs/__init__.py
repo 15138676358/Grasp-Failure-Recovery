@@ -2,6 +2,7 @@ import gymnasium
 
 
 gymnasium.register(
+    id='GraspEnv_v1',
     entry_point='graspenvs.graspenv-v1:GraspEnv_v1'
 )
 
