@@ -3,6 +3,7 @@ GraspEnv_v1.py
 Created by Yue Wang on 2024-08-10
 Version 1.1
 动作空间为1维, 历史为15*2维, 视觉为2维, 观测为2+15*2=32维
+self.state = {'contour': contour, 'convex': convex, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 2))}
 """
 
 import cv2
