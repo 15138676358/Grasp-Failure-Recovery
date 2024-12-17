@@ -1,5 +1,5 @@
 """
-GraspEnv_v1.py
+GraspEnv_v1
 Created by Yue Wang on 2024-08-10
 Version 1.1
 动作空间为1维, 历史为15*2维, 视觉为2维, 观测为2+15*2=32维
@@ -78,7 +78,7 @@ class GraspEnv_v1(gymnasium.Env):
         cv2.putText(frame, f"Attempts: {self.state['attempt']}", (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
         # draw the history
         for i in range(self.state['attempt']):
-            action_x, force = self.history[i]
+            action_x, force = self.state['history'][i]
             action_y = 1
             if i == self.state['attempt'] - 1:
                 cv2.circle(frame, (int(500 * action_x), int(250 * action_y)), 3, (255, 0, 0), -1)  # If the last action, red point
@@ -92,4 +92,6 @@ class GraspEnv_v1(gymnasium.Env):
             return frame
         elif self.render_mode == 'rgb_array':
             return frame
-        
+
+if __name__ == '__main__':   
+    pass
