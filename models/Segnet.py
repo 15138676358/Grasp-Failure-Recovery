@@ -54,8 +54,7 @@ class SegmentNet(nn.Module):
         return pos_encoding
 
 
-    def forward(self, inputs, attempts):
-        observations, actions = inputs[:, :76], inputs[:, 76:]
+    def forward(self, observations, actions, attempts):
         history_actions = observations[:, 16:].view(-1, 15, 4)[:, :, :3]
         history_forces = observations[:, 16:].view(-1, 15, 4)[:, :, 3:]
 

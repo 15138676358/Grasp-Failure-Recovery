@@ -19,9 +19,16 @@ class GraspAgent:
         self.env = gymnasium.make(id=config['env'], render_mode='rgb_array')
         self.model = load_model(config)
 
-    def reset(self, contour, convex):
-        self.env.reset(contour, convex)
-
+    def calculate_scores(self):
+        candidate_actions = torch.tensor(self.env.state['candidate_actions'], dtype=torch.float32).to(device='cuda')
+        observation = torch.tensor(self.env.get_observation(), dtype=torch.float32).to(device='cuda')
+        observations = torch.cat([observation.unsqueeze(0)] * candidate_actions.shape[0], dim=0)
+        with torch.no_grad():
+            output = self.model(observations, candidate_actions)
+        scores = output.squeeze().cpu().numpy()
+        
+        return scores
+    
     def choose_action(self, num_topk=100):
         scores = self.calculate_scores()
         topk = np.argsort(scores)[-num_topk:]
@@ -30,34 +37,27 @@ class GraspAgent:
 
         return action
 
-    def calculate_scores(self):
-        observation = torch.tensor(self.env.get_observation(), dtype=torch.float32).to(device=self.device)
-        observations = torch.cat([observation.unsqueeze(0)] * 50 * 50, dim=0)
-        input = torch.cat((observations, self.env.state['candidate_actions']), dim=1)
-        with torch.no_grad():
-            output = self.model(input)
-        scores = output.squeeze().cpu().numpy()
-        
-        return scores
-
     def update(self, action, force):
         self.env.state['history'][self.env.state['attempt']] = np.array([action[0], action[1], action[2], force])
         self.env.state['attempt'] += 1
 
+    def reset(self, contour, convex):
+        self.env.initialize_state(contour, convex)
+        self.env.reset()
 
 def load_model(config):
     env_id, model_id = config['env'], config['model']
     if model_id == 'Random':
         return None
-    elif model_id == 'SegmentNet':
+    elif model_id == 'Segnet':
         model = models.SegmentNet()
-    elif model_id == 'TransformerNet':
+    elif model_id == 'Transnet':
         model = models.TransformerNet()
-    elif model_id == 'CuriosityNet':
+    elif model_id == 'Curnet':
         model = models.CuriosityNet()
-    elif model_id == 'DirectNet':
+    elif model_id == 'Dirnet':
         model = models.DirectNet()
-    torch.load(model, f'./checkpoint/{env_id}/{model_id}_best.pth')
+    model.load_state_dict(torch.load(f'./checkpoint/{env_id}/{model_id}/model_best.pth'))
     model.to(device='cuda')
     model.eval()
     

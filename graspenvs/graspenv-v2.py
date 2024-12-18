@@ -178,7 +178,7 @@ def calculate_rectangles(contour):
     if len(intercept_list_theta1) == 2 and len(intercept_list_theta2) == 2:
         # 只有一个矩形2-2，将截距个数较多的倾角作为矩形倾角
         rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
-        rectangle2, rectangle_collision = None, None
+        rectangle2, rectangle_collision = [[0, 0]], [[0, 0]]
         if np.count_nonzero(indices1) > np.count_nonzero(indices2):
             theta2 = theta1
         else:
