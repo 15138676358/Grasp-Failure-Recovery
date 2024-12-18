@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import gymnasium
 from gymnasium import spaces
-from scipy.interpolate import interp1d
+import graspenvs.utils as utils
 
 class GraspEnv_v3(gymnasium.Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
@@ -26,7 +26,6 @@ class GraspEnv_v3(gymnasium.Env):
         self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
         self.observation_space = spaces.Box(low=0, high=1, shape=(76, ))
         self.action_space = spaces.Box(low=0, high=1, shape=(3, ))
-        self.reset()
     
     def get_observation(self):
         return np.concatenate((self.state['convex'].reshape(-1), self.state['history'].reshape(-1)))
@@ -62,19 +61,7 @@ class GraspEnv_v3(gymnasium.Env):
 
         return self.get_observation(), self.compute_reward(force), self.is_done(force), self.is_truncated(force), self.get_info()
     
-    def reset(self, contour, convex, seed=None):
-        # initialize the contour and candidate actions
-        contour = interpolate_contour(contour)
-        contour = add_normal_to_contour(contour)
-        candidate_actions = calculate_candidate_actions(contour)
-        # initialize the mass and com
-        mass = np.array([np.random.uniform(5, 25)]) / 25
-        while True:
-            com = np.random.uniform(0, 50, 2) / 50
-            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour[:, 0:2] - com, axis=1).min() > 0.01:
-                break
-        self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
-
+    def reset(self, seed=None):
         return self.get_observation(), self.get_info()
     
     def render(self):
@@ -121,35 +108,20 @@ class GraspEnv_v3(gymnasium.Env):
             return frame
         elif self.render_mode == 'rgb_array':
             return frame
+        
+    def initialize_state(self, contour, convex):
+        # initialize the contour and candidate actions
+        contour = utils.interpolate_contour(contour)
+        contour = utils.add_normal_to_contour(contour)
+        candidate_actions = calculate_candidate_actions(contour)
+        # initialize the mass and com
+        mass = np.array([np.random.uniform(5, 25)]) / 25
+        while True:
+            com = np.random.uniform(0, 50, 2) / 50
+            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour[:, 0:2] - com, axis=1).min() > 0.01:
+                break
+        self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
 
-def interpolate_contour(contour, num_grid=100):
-        # Interpolate the contour to a grid
-        # contour: a list of points (x, y)
-        # num_grid: the number of grids
-        distances = np.sqrt(np.sum(np.diff(contour, axis=0)**2, axis=1))  # Calculate the distance between each point
-        cumulative_lengths = np.concatenate(([0], np.cumsum(distances)))  # Calculate the cumulative length
-        total_length = cumulative_lengths[-1]
-        new_lengths = np.linspace(0, total_length, num_grid)
-        interp_func_x = interp1d(cumulative_lengths, contour[:, 0], kind='linear')
-        interp_func_y = interp1d(cumulative_lengths, contour[:, 1], kind='linear')
-        x_new = interp_func_x(new_lengths)
-        y_new = interp_func_y(new_lengths)
-        interpolated_contour = np.column_stack((x_new, y_new))
-
-        return interpolated_contour
-
-def add_normal_to_contour(contour):
-    # Calculate the normal of the contour
-    # contour: a list of points (x, y)
-    # return: a list of points (x, y, theta)
-    x, y= contour[:, 0], contour[:, 1]
-    dx, dy = np.gradient(x), np.gradient(y)
-    theta = np.arctan2(dy, dx) - np.pi / 2
-    # Normalize the theta to [0, 2 * pi]
-    theta = np.where(theta < 0, theta + 2 * np.pi, theta)
-    contour = np.column_stack((x, y, theta))
-
-    return contour
 
 def calculate_candidate_actions(contour):
     # interpolate the contour with normal vectors

@@ -7,6 +7,7 @@ self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candida
 Note: 
 采用矩形拟合法计算候选抓取
 轮廓采用等比例缩放法
+物体边界增加法向量, 维度为N*3
 """
 
 import cv2
@@ -15,7 +16,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import gymnasium
 from gymnasium import spaces
-from scipy.interpolate import interp1d
+from sklearn.cluster import KMeans
+from scipy.cluster.hierarchy import fcluster, linkage
+import graspenvs.utils as utils
 
 class GraspEnv_v2(gymnasium.Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
@@ -23,10 +26,9 @@ class GraspEnv_v2(gymnasium.Env):
         super(GraspEnv_v2, self).__init__()
         self.max_steps = 15
         self.render_mode = render_mode
-        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 2)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
+        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
         self.observation_space = spaces.Box(low=0, high=1, shape=(76, ))
         self.action_space = spaces.Box(low=0, high=1, shape=(3, ))
-        self.reset()
     
     def get_observation(self):
         return np.concatenate((self.state['convex'].reshape(-1), self.state['history'].reshape(-1)))
@@ -44,7 +46,7 @@ class GraspEnv_v2(gymnasium.Env):
         # calculate the force
         noise = np.random.normal(0, 0.0001)
         t_vec = np.array([np.cos(action[2]), np.sin(action[2])])
-        norm_points = np.dot(self.state['contour'] - action[0:2], t_vec)
+        norm_points = np.dot(self.state['contour'][:, :2] - action[0:2], t_vec)
         norm_com = np.dot(self.state['com'] - action[0:2], t_vec)
         max_norm_point = np.max(norm_points / norm_com) * norm_com
         force = self.state['mass'][0] * (max_norm_point - norm_com) / max_norm_point + noise
@@ -62,17 +64,7 @@ class GraspEnv_v2(gymnasium.Env):
 
         return self.get_observation(), self.compute_reward(force), self.is_done(force), self.is_truncated(force), self.get_info()
     
-    def reset(self, contour, convex, seed=None):
-        # initialize the candidate actions
-        candidate_actions = calculate_candidate_actions(contour)
-        # initialize the mass and com
-        mass = np.array([np.random.uniform(5, 25)]) / 25
-        while True:
-            com = np.random.uniform(0, 50, 2) / 50
-            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour - com, axis=1).min() > 0.01:
-                break
-        self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
-
+    def reset(self, seed=None):
         return self.get_observation(), self.get_info()
     
     def render(self):
@@ -107,22 +99,112 @@ class GraspEnv_v2(gymnasium.Env):
         elif self.render_mode == 'rgb_array':
             return frame
         
-def calculate_candidate_actions(contour):
-    # TODO: calculate the fitted rectangles from the contour
-    rectangle1 = np.array([[0, 1], [0, 0], [1, 0], [1, 1]])
-    rectangle2 = np.array([[0, 1], [0, 0], [1, 0], [1, 1]])
-    theta = np.arctan2(contour[1, 1] - contour[0, 1], contour[1, 0] - contour[0, 0])
+    def initialize_state(self, contour, convex):
+        # initialize the candidate actions
+        contour = utils.interpolate_contour(contour)
+        contour = utils.add_normal_to_contour(contour)
+        candidate_actions = calculate_candidate_actions(contour)
+        # initialize the mass and com
+        mass = np.array([np.random.uniform(5, 25)]) / 25
+        while True:
+            com = np.random.uniform(0, 50, 2) / 50
+            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour[:, :2] - com, axis=1).min() > 0.01:
+                break
+        self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
 
+def calculate_intersections(lines_theta1, lines_theta2):
+    # input: lines_theta1: [[intercept1, theta1], [intercept2, theta1]], lines_theta2: [[intercept1, theta2], [intercept2, theta2]]
+    # output: rectangle: [[pt1], [pt2], [pt3], [pt4]]
+    # 计算两条直线的交点
+    pts = []
+    for line1, line2 in zip([lines_theta1[0], lines_theta1[0], lines_theta1[1], lines_theta1[1]], [lines_theta2[0], lines_theta2[1], lines_theta2[1], lines_theta2[0]]):
+        intercept1, theta1 = line1
+        intercept2, theta2 = line2
+        a1, b1 = np.sin(theta1), -np.cos(theta1)
+        a2, b2 = np.sin(theta2), -np.cos(theta2)
+        x = (intercept2 * b1 - intercept1 * b2) / (a1 * b2 - a2 * b1)
+        y = (intercept1 * a2 - intercept2 * a1) / (a1 * b2 - a2 * b1)
+        pts.append([x, y])
+
+    return np.array(pts)
+
+def calculate_rectangles(contour):
+    # 将倾角变换到0-180度，注意这里的倾角是法向量倾角，需要先转换为矩形主轴倾角
+    thetas = np.mod(contour[:, 2] + np.pi / 2, np.pi)
+    # 使用 K-means 聚类算法将倾角聚为两类
+    kmeans = KMeans(n_clusters=2, random_state=0).fit(thetas.reshape(-1, 1))
+    labels = kmeans.labels_
+    indices1, indices2 = np.where(labels == 0)[0], np.where(labels == 1)[0]
+    # 找到两类倾角的代表值，使用中位数计算
+    theta1, theta2 = np.median(thetas[indices1], axis=0), np.median(thetas[indices2], axis=0)
+
+    # 计算轮廓点在对应倾角上的截距，从而分割为若干离散线段
+    intercept_list_theta1, intercept_list_theta2 = [], []
+    for indices, theta, intercept_list in zip([indices1, indices2], [theta1, theta2], [intercept_list_theta1, intercept_list_theta2]):
+        intercepts = np.dot(contour[indices, 0:2], np.array([-np.sin(theta), np.cos(theta)]))
+        Z = linkage(intercepts.reshape(-1, 1), method='single')
+        cluster_labels = fcluster(Z, t=0.05, criterion='distance')
+        unique_labels = np.unique(cluster_labels)
+        for label in unique_labels:
+            intercept_indices = np.where(cluster_labels == label)[0]
+            intercept_list.append([np.median(intercepts[intercept_indices], axis=0), np.count_nonzero(intercept_indices)])
+    
+    # 从interception_list中选择个数最多的线段和距离最大个数线段最近的线段作为主线段
+    # 从interception_list中选择截距之差最大的两条线段作为副线段
+    intercept_list = intercept_list_theta1
+    if len(intercept_list) == 2:
+        primary_intercept_theta1, secondary_intercept_theta1 = intercept_list, intercept_list
+    elif len(intercept_list) == 3:
+        max_count_intercept = max(intercept_list, key=lambda x: x[1])
+        intercept_list = sorted(intercept_list, key=lambda x: np.abs(x[0] - max_count_intercept[0]), reverse=False)
+        primary_intercept_theta1 = intercept_list[:2]
+        secondary_intercept_theta1 = [intercept_list[0], intercept_list[2]]
+    elif len(intercept_list) == 4:
+        intercept_list = sorted(intercept_list, key=lambda x: x[0], reverse=True)
+        primary_intercept_theta1, secondary_intercept_theta1 = intercept_list[1:3], [intercept_list[0], intercept_list[3]]
+    intercept_list = intercept_list_theta2
+    if len(intercept_list) == 2:
+        primary_intercept_theta2, secondary_intercept_theta2 = intercept_list, intercept_list
+    elif len(intercept_list) == 3:
+        max_count_intercept = max(intercept_list, key=lambda x: x[1])
+        intercept_list = sorted(intercept_list, key=lambda x: np.abs(x[0] - max_count_intercept[0]), reverse=False)
+        primary_intercept_theta2 = intercept_list[:2]
+        secondary_intercept_theta2 = [intercept_list[0], intercept_list[2]]
+    elif len(intercept_list) == 4:
+        intercept_list = sorted(intercept_list, key=lambda x: x[0], reverse=True)
+        primary_intercept_theta2, secondary_intercept_theta2 = intercept_list[1:3], [intercept_list[0], intercept_list[3]]
+        
+    # 分类讨论：2-2，3-3，4-3，3-4，4-4
+    if len(intercept_list_theta1) == 2 and len(intercept_list_theta2) == 2:
+        # 只有一个矩形2-2，将截距个数较多的倾角作为矩形倾角
+        rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
+        rectangle2, rectangle_collision = None, None
+        if np.count_nonzero(indices1) > np.count_nonzero(indices2):
+            theta2 = theta1
+        else:
+            theta1 = theta2
+    else:
+        # 有两个矩形3-3，4-3，3-4，4-4，设置碰撞检测区
+        rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
+        rectangle2 = calculate_intersections([[primary_intercept_theta2[0][0], theta2], [primary_intercept_theta2[1][0], theta2]], [[secondary_intercept_theta1[0][0], theta1], [secondary_intercept_theta1[1][0], theta1]])
+        collision_offset_theta1 = np.sign(primary_intercept_theta1[0][0] - primary_intercept_theta1[1][0]) * 0.1
+        collision_offset_theta2 = np.sign(primary_intercept_theta2[0][0] - primary_intercept_theta2[1][0]) * 0.1
+        rectangle_collision = calculate_intersections([[primary_intercept_theta1[0][0] + collision_offset_theta1, theta1], [primary_intercept_theta1[1][0] - collision_offset_theta1, theta1]], [[primary_intercept_theta2[0][0] + collision_offset_theta2, theta2], [primary_intercept_theta2[1][0] - collision_offset_theta2, theta2]])
+
+    return rectangle1, rectangle2, rectangle_collision, theta1, theta2
+
+def calculate_candidate_actions(contour):
+    rectangle1, rectangle2, rectangle_collision, theta1, theta2 = calculate_rectangles(contour)
     grid_size = 50
     candidate_actions = []
     for x in range(grid_size):
         for y in range(grid_size):
             a_x, a_y = x / grid_size, y / grid_size
-            if mplPath.Path(rectangle1).contains_point([a_x, a_y]):
-                a_theta = theta
+            if mplPath.Path(rectangle1).contains_point([a_x, a_y]) and not mplPath.Path(rectangle_collision).contains_point([a_x, a_y]):
+                a_theta = theta1
                 candidate_actions.append([a_x, a_y, a_theta])
-            if mplPath.Path(rectangle2).contains_point([a_x, a_y]):
-                a_theta = theta + np.pi / 2
+            if mplPath.Path(rectangle2).contains_point([a_x, a_y]) and not mplPath.Path(rectangle_collision).contains_point([a_x, a_y]):
+                a_theta = theta2
                 candidate_actions.append([a_x, a_y, a_theta])
     candidate_actions = np.array(candidate_actions)
 

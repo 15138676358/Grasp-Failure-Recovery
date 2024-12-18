@@ -1,7 +1,15 @@
+"""
+Note:
+在调用step和render前, 需要先调用reset初始化环境
+"""
+
+
 import cv2
 import numpy as np
 import graspenvs
 import gymnasium
+
+import graspenvs.utils
 
 
 def test_env_v1():
@@ -30,16 +38,17 @@ def test_env_v1():
     print(f'Success Rate: {np.sum(success) / 100}')
 
 def test_env_v2_and_v3():
-    env = gymnasium.make(id='GraspEnv_v3', render_mode='human')
+    env = gymnasium.make(id='GraspEnv_v2', render_mode='human')
     num_trials = 10
     attempts, returns, success = np.zeros((num_trials)), np.zeros((num_trials)), np.zeros((num_trials))
     video_writer = cv2.VideoWriter(filename='video.mp4', fourcc=cv2.VideoWriter_fourcc(*'XVID'), fps=5, frameSize=(500, 500))
     for i in range(num_trials):
+        contour, convex = graspenvs.utils.generate_contour()
+        env.initialize_state(contour, convex)
         env.reset()
         while True:
             # 随机选择一个动作
             action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
-            print(action)
             state, reward, done, truncated, info = env.step(action)
             frame = env.render()  # 获取渲染帧
             # 将帧写入视频文件

@@ -7,7 +7,6 @@ Note:
 env在这里只起到一个数据容器的作用, 在执行一次抓取后, 通过实际反馈更新env, 不用env内部的step函数更新
 """
 
-
 import graspenvs
 import gymnasium
 import matplotlib.pyplot as plt
@@ -52,4 +51,14 @@ def load_model(config):
         return None
     elif model_id == 'SegmentNet':
         model = models.SegmentNet()
-        torch.load(model, f'./checkpoint/{env_id}/{model_id}_best.pth')
+    elif model_id == 'TransformerNet':
+        model = models.TransformerNet()
+    elif model_id == 'CuriosityNet':
+        model = models.CuriosityNet()
+    elif model_id == 'DirectNet':
+        model = models.DirectNet()
+    torch.load(model, f'./checkpoint/{env_id}/{model_id}_best.pth')
+    model.to(device='cuda')
+    model.eval()
+    
+    return model

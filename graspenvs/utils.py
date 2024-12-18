@@ -76,3 +76,32 @@ def generate_contour():
     rectangle2 = (rectangle2 - scale_point) / scale
 
     return contour, convex
+
+def interpolate_contour(contour, num_grid=100):
+        # Interpolate the contour to a grid
+        # contour: a list of points (x, y)
+        # num_grid: the number of grids
+        distances = np.sqrt(np.sum(np.diff(contour, axis=0)**2, axis=1))  # Calculate the distance between each point
+        cumulative_lengths = np.concatenate(([0], np.cumsum(distances)))  # Calculate the cumulative length
+        total_length = cumulative_lengths[-1]
+        new_lengths = np.linspace(0, total_length, num_grid)
+        interp_func_x = interp1d(cumulative_lengths, contour[:, 0], kind='linear')
+        interp_func_y = interp1d(cumulative_lengths, contour[:, 1], kind='linear')
+        x_new = interp_func_x(new_lengths)
+        y_new = interp_func_y(new_lengths)
+        interpolated_contour = np.column_stack((x_new, y_new))
+
+        return interpolated_contour
+
+def add_normal_to_contour(contour):
+    # Calculate the normal of the contour
+    # contour: a list of points (x, y)
+    # return: a list of points (x, y, theta)
+    x, y= contour[:, 0], contour[:, 1]
+    dx, dy = np.gradient(x), np.gradient(y)
+    theta = np.arctan2(dy, dx) - np.pi / 2
+    # Normalize the theta to [0, 2 * pi]
+    theta = np.where(theta < 0, theta + 2 * np.pi, theta)
+    contour = np.column_stack((x, y, theta))
+
+    return contour
