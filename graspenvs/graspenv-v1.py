@@ -3,7 +3,9 @@ GraspEnv_v1
 Created by Yue Wang on 2024-08-10
 Version 1.1
 动作空间为1维, 历史为15*2维, 视觉为2维, 观测为2+15*2=32维
-self.state = {'contour': contour, 'convex': convex, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 2))}
+self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 2))}
+Note:
+直接采样候选抓取
 """
 
 import cv2
@@ -17,7 +19,7 @@ class GraspEnv_v1(gymnasium.Env):
         super(GraspEnv_v1, self).__init__()
         self.max_steps = 15
         self.render_mode = render_mode
-        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(2, 1)), 'convex': spaces.Box(low=0, high=1, shape=(2, 1)), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(1, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 2))}
+        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(2, 1)), 'convex': spaces.Box(low=0, high=1, shape=(2, 1)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(1, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(1, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 2))}
         self.observation_space = spaces.Box(low=0, high=1, shape=(32, ))
         self.action_space = spaces.Box(low=0, high=1, shape=(1, ))
         self.reset()
@@ -60,7 +62,7 @@ class GraspEnv_v1(gymnasium.Env):
         contour, convex = np.array([[0], [1]]), np.array([[0], [1]])
         mass = np.array([np.random.uniform(0, 1)])
         com = np.random.uniform(0, 1, 1)
-        self.state = {'contour': contour, 'convex': convex, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 2))}
+        self.state = {'contour': contour, 'convex': convex, 'candidate_actions': np.arange(0, 1, 1 / 50), 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 2))}
 
         return self.get_observation(), self.get_info()
     

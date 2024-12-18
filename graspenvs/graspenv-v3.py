@@ -23,7 +23,7 @@ class GraspEnv_v3(gymnasium.Env):
         super(GraspEnv_v3, self).__init__()
         self.max_steps = 15
         self.render_mode = render_mode
-        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
+        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
         self.observation_space = spaces.Box(low=0, high=1, shape=(76, ))
         self.action_space = spaces.Box(low=0, high=1, shape=(3, ))
         self.reset()
@@ -62,9 +62,8 @@ class GraspEnv_v3(gymnasium.Env):
 
         return self.get_observation(), self.compute_reward(force), self.is_done(force), self.is_truncated(force), self.get_info()
     
-    def reset(self, seed=None):
+    def reset(self, contour, convex, seed=None):
         # initialize the contour and candidate actions
-        contour, convex = generate_contour()
         contour = interpolate_contour(contour)
         contour = add_normal_to_contour(contour)
         candidate_actions = calculate_candidate_actions(contour)
@@ -122,83 +121,6 @@ class GraspEnv_v3(gymnasium.Env):
             return frame
         elif self.render_mode == 'rgb_array':
             return frame
-        
-
-# 生成随机轮廓, 包括两个相互垂直的矩形。详见论文agent5
-def generate_contour():
-    # Create a block comsists of two rectangles, whose size is length x width
-    # initialize the center of the main rectangle
-    center = np.random.uniform(5, 45, 2) / 50
-    theta = np.random.uniform(0, 2*np.pi)
-    length = np.random.uniform(10, 30) / 50
-    width = np.random.uniform(5, 10) / 50
-
-    t_vec = np.array([np.cos(theta), np.sin(theta)])
-    n_vec = np.array([-np.sin(theta), np.cos(theta)])
-    pt1 = center + length / 2 * t_vec + width / 2 * n_vec
-    pt2 = center + length / 2 * t_vec - width / 2 * n_vec
-    pt3 = center - length / 2 * t_vec - width / 2 * n_vec
-    pt4 = center - length / 2 * t_vec + width / 2 * n_vec
-    rectangle1 = np.array([pt1, pt2, pt3, pt4]).copy()
-
-    # initialize the size of the co-rectangles
-    co_length = np.random.uniform(0, 30, 2) / 50
-    co_width = np.random.uniform(5, 10) / 50
-    offset = np.random.uniform(0, length / 2 - co_width / 2)
-
-    pt5 = center + offset * t_vec + co_width / 2 * t_vec + co_length[0] / 2 * n_vec
-    pt6 = center + offset * t_vec + co_width / 2 * t_vec + width / 2 * n_vec
-    pt7 = center + offset * t_vec + co_width / 2 * t_vec - width / 2 * n_vec
-    pt8 = center + offset * t_vec + co_width / 2 * t_vec - co_length[1] / 2 * n_vec
-    pt9 = center + offset * t_vec - co_width / 2 * t_vec + co_length[0] / 2 * n_vec
-    pt10 = center + offset * t_vec - co_width / 2 * t_vec + width / 2 * n_vec
-    pt11 = center + offset * t_vec - co_width / 2 * t_vec - width / 2 * n_vec
-    pt12 = center + offset * t_vec - co_width / 2 * t_vec - co_length[1] / 2 * n_vec
-    rectangle2 = np.array([pt5, pt8, pt12, pt9]).copy()
-
-    # merge the points
-    if co_length[0] / 2 < width / 2:
-        left_pts = [pt2, pt1, pt4]
-        left_convex = [pt1, pt6, pt10, pt4]
-    else:
-        left_pts = [pt2, pt1, pt6, pt5, pt9, pt10, pt4]
-        left_convex = [pt1, pt5, pt9, pt4]
-
-    if co_length[1] / 2 < width / 2:
-        right_pts = [pt4, pt3, pt2]
-        right_convex = [pt3, pt11, pt7, pt2]
-    else:
-        right_pts = [pt4, pt3, pt11, pt12, pt8, pt7, pt2]
-        right_convex = [pt3, pt12, pt8, pt2]
-
-    loop_outline = np.array(right_pts + left_pts)
-
-    # rearrange the points to 50 points
-    # Compute the cumulative distance along the outline
-    distance = np.cumsum(np.sqrt(np.sum(np.diff(loop_outline, axis=0)**2, axis=1)))
-    distance = np.insert(distance, 0, 0)
-
-    # Create an interpolator for the x and y coordinates
-    fx = interp1d(distance, loop_outline[:, 0])
-    fy = interp1d(distance, loop_outline[:, 1])
-
-    # Create an array of evenly spaced distance values
-    sample_distances = np.linspace(0, distance[-1], 100)
-
-    # Use the interpolators to compute the x and y coordinates of the samples
-    sample_x = fx(sample_distances)
-    sample_y = fy(sample_distances)
-    contour = np.column_stack((sample_x, sample_y))
-    convex = np.array(right_convex + left_convex)
-    # scale the contour to 0-1
-    scale = np.max((contour.max(axis=0) - contour.min(axis=0)))
-    scale_point = contour.min(axis=0)
-    contour = (contour - scale_point) / scale
-    convex = (convex - scale_point) / scale
-    rectangle1 = (rectangle1 - scale_point) / scale
-    rectangle2 = (rectangle2 - scale_point) / scale
-
-    return contour, convex
 
 def interpolate_contour(contour, num_grid=100):
         # Interpolate the contour to a grid
@@ -242,7 +164,5 @@ def calculate_candidate_actions(contour):
     x, y, theta = (p1[:, :, 0] + p2[:, :, 0]) / 2, (p1[:, :, 1] + p2[:, :, 1]) / 2, angles_p1 + np.pi / 2
     mask = (antipodal_scores > 0.9) & (distance_scores < 0.5)
     candidate_actions = np.column_stack([x[mask].reshape(-1), y[mask].reshape(-1), theta[mask].reshape(-1)])
-    if candidate_actions.shape[0] != 0:
-        a=1
 
     return candidate_actions

@@ -5,7 +5,7 @@ Version 2.1
 动作空间为3维, 历史为15*4维, 视觉为8*2维, 观测为8*2+15*4=76维
 self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
 Note: 
-状态空间增加候选抓取
+采用矩形拟合法计算候选抓取
 轮廓采用等比例缩放法
 """
 
@@ -23,7 +23,7 @@ class GraspEnv_v2(gymnasium.Env):
         super(GraspEnv_v2, self).__init__()
         self.max_steps = 15
         self.render_mode = render_mode
-        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 2)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
+        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 2)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
         self.observation_space = spaces.Box(low=0, high=1, shape=(76, ))
         self.action_space = spaces.Box(low=0, high=1, shape=(3, ))
         self.reset()
@@ -62,9 +62,9 @@ class GraspEnv_v2(gymnasium.Env):
 
         return self.get_observation(), self.compute_reward(force), self.is_done(force), self.is_truncated(force), self.get_info()
     
-    def reset(self, seed=None):
-        # initialize the contour and candidate actions
-        contour, convex, candidate_actions = generate_contour()
+    def reset(self, contour, convex, seed=None):
+        # initialize the candidate actions
+        candidate_actions = calculate_candidate_actions(contour)
         # initialize the mass and com
         mass = np.array([np.random.uniform(5, 25)]) / 25
         while True:
@@ -107,82 +107,12 @@ class GraspEnv_v2(gymnasium.Env):
         elif self.render_mode == 'rgb_array':
             return frame
         
+def calculate_candidate_actions(contour):
+    # TODO: calculate the fitted rectangles from the contour
+    rectangle1 = np.array([[0, 1], [0, 0], [1, 0], [1, 1]])
+    rectangle2 = np.array([[0, 1], [0, 0], [1, 0], [1, 1]])
+    theta = np.arctan2(contour[1, 1] - contour[0, 1], contour[1, 0] - contour[0, 0])
 
-# 生成随机轮廓, 包括两个相互垂直的矩形。详见论文agent5
-def generate_contour():
-    # Create a block comsists of two rectangles, whose size is length x width
-    # initialize the center of the main rectangle
-    center = np.random.uniform(5, 45, 2) / 50
-    theta = np.random.uniform(0, 2*np.pi)
-    length = np.random.uniform(10, 30) / 50
-    width = np.random.uniform(5, 10) / 50
-
-    t_vec = np.array([np.cos(theta), np.sin(theta)])
-    n_vec = np.array([-np.sin(theta), np.cos(theta)])
-    pt1 = center + length / 2 * t_vec + width / 2 * n_vec
-    pt2 = center + length / 2 * t_vec - width / 2 * n_vec
-    pt3 = center - length / 2 * t_vec - width / 2 * n_vec
-    pt4 = center - length / 2 * t_vec + width / 2 * n_vec
-    rectangle1 = np.array([pt1, pt2, pt3, pt4]).copy()
-
-    # initialize the size of the co-rectangles
-    co_length = np.random.uniform(0, 30, 2) / 50
-    co_width = np.random.uniform(5, 10) / 50
-    offset = np.random.uniform(0, length / 2 - co_width / 2)
-
-    pt5 = center + offset * t_vec + co_width / 2 * t_vec + co_length[0] / 2 * n_vec
-    pt6 = center + offset * t_vec + co_width / 2 * t_vec + width / 2 * n_vec
-    pt7 = center + offset * t_vec + co_width / 2 * t_vec - width / 2 * n_vec
-    pt8 = center + offset * t_vec + co_width / 2 * t_vec - co_length[1] / 2 * n_vec
-    pt9 = center + offset * t_vec - co_width / 2 * t_vec + co_length[0] / 2 * n_vec
-    pt10 = center + offset * t_vec - co_width / 2 * t_vec + width / 2 * n_vec
-    pt11 = center + offset * t_vec - co_width / 2 * t_vec - width / 2 * n_vec
-    pt12 = center + offset * t_vec - co_width / 2 * t_vec - co_length[1] / 2 * n_vec
-    rectangle2 = np.array([pt5, pt8, pt12, pt9]).copy()
-
-    # merge the points
-    if co_length[0] / 2 < width / 2:
-        left_pts = [pt2, pt1, pt4]
-        left_convex = [pt1, pt6, pt10, pt4]
-    else:
-        left_pts = [pt2, pt1, pt6, pt5, pt9, pt10, pt4]
-        left_convex = [pt1, pt5, pt9, pt4]
-
-    if co_length[1] / 2 < width / 2:
-        right_pts = [pt4, pt3, pt2]
-        right_convex = [pt3, pt11, pt7, pt2]
-    else:
-        right_pts = [pt4, pt3, pt11, pt12, pt8, pt7, pt2]
-        right_convex = [pt3, pt12, pt8, pt2]
-
-    loop_outline = np.array(right_pts + left_pts)
-
-    # rearrange the points to 50 points
-    # Compute the cumulative distance along the outline
-    distance = np.cumsum(np.sqrt(np.sum(np.diff(loop_outline, axis=0)**2, axis=1)))
-    distance = np.insert(distance, 0, 0)
-
-    # Create an interpolator for the x and y coordinates
-    fx = interp1d(distance, loop_outline[:, 0])
-    fy = interp1d(distance, loop_outline[:, 1])
-
-    # Create an array of evenly spaced distance values
-    sample_distances = np.linspace(0, distance[-1], 100)
-
-    # Use the interpolators to compute the x and y coordinates of the samples
-    sample_x = fx(sample_distances)
-    sample_y = fy(sample_distances)
-    contour = np.column_stack((sample_x, sample_y))
-    convex = np.array(right_convex + left_convex)
-    # scale the contour to 0-1
-    scale = np.max((contour.max(axis=0) - contour.min(axis=0)))
-    scale_point = contour.min(axis=0)
-    contour = (contour - scale_point) / scale
-    convex = (convex - scale_point) / scale
-    rectangle1 = (rectangle1 - scale_point) / scale
-    rectangle2 = (rectangle2 - scale_point) / scale
-
-    # calculate the candidate actions
     grid_size = 50
     candidate_actions = []
     for x in range(grid_size):
@@ -194,5 +124,6 @@ def generate_contour():
             if mplPath.Path(rectangle2).contains_point([a_x, a_y]):
                 a_theta = theta + np.pi / 2
                 candidate_actions.append([a_x, a_y, a_theta])
+    candidate_actions = np.array(candidate_actions)
 
-    return contour, convex, candidate_actions
+    return candidate_actions
