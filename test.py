@@ -50,8 +50,8 @@ def test_env_v2_and_v3():
         env.reset()
         while True:
             # 随机选择一个动作
-            action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
-            # action = agent.choose_action()
+            # action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
+            action = agent.choose_action()
             state, reward, done, truncated, info = env.step(action)
             agent.update(action, env.state['history'][env.state['attempt'] - 1, -1])
             frame = env.render()  # 获取渲染帧

@@ -8,7 +8,7 @@ def generate_contour():
     center = np.random.uniform(5, 45, 2) / 50
     theta = np.random.uniform(0, 2*np.pi)
     length = np.random.uniform(10, 30) / 50
-    width = np.random.uniform(5, 10) / 50
+    width = np.random.uniform(3, 7) / 50
 
     t_vec = np.array([np.cos(theta), np.sin(theta)])
     n_vec = np.array([-np.sin(theta), np.cos(theta)])
@@ -20,7 +20,7 @@ def generate_contour():
 
     # initialize the size of the co-rectangles
     co_length = np.random.uniform(0, 30, 2) / 50
-    co_width = np.random.uniform(5, 10) / 50
+    co_width = np.random.uniform(3, 7) / 50
     offset = np.random.uniform(0, length / 2 - co_width / 2)
 
     pt5 = center + offset * t_vec + co_width / 2 * t_vec + co_length[0] / 2 * n_vec

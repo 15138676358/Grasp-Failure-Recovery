@@ -94,7 +94,7 @@ class GraspEnv_v2(gymnasium.Env):
 
         if self.render_mode == 'human':
             cv2.imshow('Environment State', frame)
-            cv2.waitKey(500)  # wait for 1ms
+            cv2.waitKey(100)  # wait for 1ms
             return frame
         elif self.render_mode == 'rgb_array':
             return frame
@@ -113,8 +113,8 @@ class GraspEnv_v2(gymnasium.Env):
         self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
 
 def calculate_intersections(lines_theta1, lines_theta2):
-    # input: lines_theta1: [[intercept1, theta1], [intercept2, theta1]], lines_theta2: [[intercept1, theta2], [intercept2, theta2]]
-    # output: rectangle: [[pt1], [pt2], [pt3], [pt4]]
+    # input: lines_theta1: [[primary_intercept1, theta1], [primary_intercept2, theta1]], lines_theta2: [[secondary_intercept1, theta2], [secondary_intercept2, theta2]]
+    # output: rectangle: np.array([[pt1], [pt2], [pt3], [pt4]]), pri-pri-sec-sec
     # 计算两条直线的交点
     pts = []
     for line1, line2 in zip([lines_theta1[0], lines_theta1[0], lines_theta1[1], lines_theta1[1]], [lines_theta2[0], lines_theta2[1], lines_theta2[1], lines_theta2[0]]):
@@ -177,35 +177,35 @@ def calculate_rectangles(contour):
     # 分类讨论：2-2，3-3，4-3，3-4，4-4
     if len(intercept_list_theta1) == 2 and len(intercept_list_theta2) == 2:
         # 只有一个矩形2-2，将截距个数较多的倾角作为矩形倾角
-        rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
-        rectangle2, rectangle_collision = [[0, 0]], [[0, 0]]
         if np.count_nonzero(indices1) > np.count_nonzero(indices2):
-            theta2 = theta1
+            theta2 = theta1        
+            rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
         else:
             theta1 = theta2
+            rectangle1 = calculate_intersections([[primary_intercept_theta2[0][0], theta2], [primary_intercept_theta2[1][0], theta2]], [[secondary_intercept_theta1[0][0], theta1], [secondary_intercept_theta1[1][0], theta1]])
+        rectangle2, rectangle_collision = np.array([[0, 0]] * 4), np.array([[0, 0]] * 4)
     else:
         # 有两个矩形3-3，4-3，3-4，4-4，设置碰撞检测区
         rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
         rectangle2 = calculate_intersections([[primary_intercept_theta2[0][0], theta2], [primary_intercept_theta2[1][0], theta2]], [[secondary_intercept_theta1[0][0], theta1], [secondary_intercept_theta1[1][0], theta1]])
-        collision_offset_theta1 = np.sign(primary_intercept_theta1[0][0] - primary_intercept_theta1[1][0]) * 0.1
-        collision_offset_theta2 = np.sign(primary_intercept_theta2[0][0] - primary_intercept_theta2[1][0]) * 0.1
+        collision_offset_theta1 = np.sign(primary_intercept_theta1[0][0] - primary_intercept_theta1[1][0]) * 0.05
+        collision_offset_theta2 = np.sign(primary_intercept_theta2[0][0] - primary_intercept_theta2[1][0]) * 0.05
         rectangle_collision = calculate_intersections([[primary_intercept_theta1[0][0] + collision_offset_theta1, theta1], [primary_intercept_theta1[1][0] - collision_offset_theta1, theta1]], [[primary_intercept_theta2[0][0] + collision_offset_theta2, theta2], [primary_intercept_theta2[1][0] - collision_offset_theta2, theta2]])
 
     return rectangle1, rectangle2, rectangle_collision, theta1, theta2
 
 def calculate_candidate_actions(contour):
     rectangle1, rectangle2, rectangle_collision, theta1, theta2 = calculate_rectangles(contour)
-    grid_size = 50
+    # 从principle_points1[0]开始，到principle_points1[1]结束, 按照等间隔取线段上的点
+    interpolated_points1 = np.linspace((rectangle1[0] + rectangle1[3]) / 2, (rectangle1[1] + rectangle1[2]) / 2, int(np.linalg.norm(rectangle1[0] - rectangle1[1]) / 0.01))
+    interpolated_points2 = np.linspace((rectangle2[0] + rectangle2[3]) / 2, (rectangle2[1] + rectangle2[2]) / 2, int(np.linalg.norm(rectangle2[0] - rectangle2[1]) / 0.01))
     candidate_actions = []
-    for x in range(grid_size):
-        for y in range(grid_size):
-            a_x, a_y = x / grid_size, y / grid_size
-            if mplPath.Path(rectangle1).contains_point([a_x, a_y]) and not mplPath.Path(rectangle_collision).contains_point([a_x, a_y]):
-                a_theta = theta1
-                candidate_actions.append([a_x, a_y, a_theta])
-            if mplPath.Path(rectangle2).contains_point([a_x, a_y]) and not mplPath.Path(rectangle_collision).contains_point([a_x, a_y]):
-                a_theta = theta2
-                candidate_actions.append([a_x, a_y, a_theta])
+    for points in interpolated_points1:
+        if not mplPath.Path(rectangle_collision).contains_point(points):
+            candidate_actions.append([points[0], points[1], theta1])
+    for points in interpolated_points2:
+        if not mplPath.Path(rectangle_collision).contains_point(points):
+            candidate_actions.append([points[0], points[1], theta2])
     candidate_actions = np.array(candidate_actions)
 
     return candidate_actions
