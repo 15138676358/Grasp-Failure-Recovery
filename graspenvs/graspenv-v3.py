@@ -104,7 +104,7 @@ class GraspEnv_v3(gymnasium.Env):
 
         if self.render_mode == 'human':
             cv2.imshow('Environment State', frame)
-            cv2.waitKey(0)  # wait for keyboard
+            cv2.waitKey(100)  # wait for keyboard
             return frame
         elif self.render_mode == 'rgb_array':
             return frame

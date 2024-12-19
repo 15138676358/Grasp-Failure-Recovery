@@ -1,0 +1,10 @@
+{
+    "env": "GraspEnv_v3",
+    "lr": 0.001,
+    "batch_size": 64,
+    "weight_decay": 1e-05,
+    "model": "Dirnet",
+    "hidden_dim": 64,
+    "observation_dim": 16,
+    "num_labels": 10000
+}

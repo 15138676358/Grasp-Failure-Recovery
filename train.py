@@ -7,6 +7,7 @@ Note:
 """
 import os
 import argparse
+import json
 import matplotlib.pyplot as plt
 import models
 import numpy as np
@@ -27,10 +28,14 @@ parser.add_argument('--weight_decay', type=float, default=1e-5, help='weight dec
 parser.add_argument('--model', type=str, default='Dirnet', help='model type')
 parser.add_argument('--hidden_dim', type=int, default=64, help='hidden dimension')
 parser.add_argument('--observation_dim', type=int, default=16, help='hidden dimension')
-parser.add_argument('--num_labels', type=int, default=1000, help='20000, 10000, 5000, 2000, 1000, 500')
+parser.add_argument('--num_labels', type=int, default=10000, help='20000, 10000, 5000, 2000, 1000, 500')
 args = parser.parse_args()
-log_dir = f'./checkpoint/{args.env}/{args.model}'
+log_dir = f'./checkpoint/{args.env}/{args.model}/lr_{args.lr}_bs_{args.batch_size}_hid_{args.hidden_dim}'
 os.makedirs(log_dir, exist_ok=True)
+# 保存配置文件
+config_path = os.path.join(log_dir, 'config.json')
+with open(config_path, 'w') as f:
+    json.dump(vars(args), f, indent=4)
 
 def calculate_loss(model, criterion, batch):
     observations, actions, next_observations, dones, forces, attempts = batch
@@ -89,7 +94,7 @@ def eval_epoch(model, criterion, eval_loader):
 
     return [np.mean(np.array(eval_loss)), np.std(np.array(eval_loss))], [np.mean(np.array(eval_loss_dir)), np.std(np.array(eval_loss_dir))]
 
-def train(model, criterion, optimizer, train_loader, eval_loader, epochs):
+def train(model, criterion, optimizer, scheduler, train_loader, eval_loader, epochs):
     train_losses, eval_losses_mean, eval_losses_std = [], [], []
     for epoch in range(epochs):
         train_loss, train_loss_dir = train_epoch(model, criterion, optimizer, train_loader)
@@ -98,13 +103,14 @@ def train(model, criterion, optimizer, train_loader, eval_loader, epochs):
         eval_losses_mean.append([eval_loss[0], eval_loss_dir[0]])
         eval_losses_std.append([eval_loss[1], eval_loss_dir[1]])
         print(f"Epoch {epoch + 1}/{epochs}, Train Loss: {train_loss:.4f}, Eval Loss: {eval_loss[0]:.4f}+-{eval_loss_dir[1]:.4f}")
+        scheduler.step()
     
     return train_losses, eval_losses_mean, eval_losses_std
 
 def main():
     # 加载离线数据集
     train_data = np.load('./dataset/offline_dataset/train_dataset_v3.npz')
-    eval_data = np.load('./dataset/offline_dataset/train_dataset_v3.npz')
+    eval_data = np.load('./dataset/offline_dataset/eval_dataset_v3.npz')
     # 创建数据集: (observations, actions, next_observations, dones, forces, attempts)
     train_dataset = TensorDataset(
         torch.tensor(train_data['observations'], dtype=torch.float32).to(device='cuda'), 
@@ -123,7 +129,7 @@ def main():
         torch.tensor(eval_data['attempts'], dtype=torch.float32).to(device='cuda'))
     # 划分训练集和验证集
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    eval_loader = DataLoader(eval_dataset, batch_size=args.batch_size, shuffle=False)
+    eval_loader = DataLoader(eval_dataset, batch_size=int(len(eval_dataset) / 10), shuffle=False)
     # 初始化模型
     if args.model == 'Segnet':
         model = models.SegmentNet().to(device='cuda')
@@ -148,7 +154,7 @@ def main():
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=1e-6)
     # 训练模型
-    train_losses, eval_losses_mean, eval_losses_std = train(model, criterion, optimizer, train_loader, eval_loader, epochs=100)
+    train_losses, eval_losses_mean, eval_losses_std = train(model, criterion, optimizer, scheduler, train_loader, eval_loader, epochs=100)
     # 保存模型和训练结果
     losses = {'train_losses': np.array(train_losses), 'eval_losses_mean': np.array(eval_losses_mean), 'eval_losses_std': np.array(eval_losses_std)}
     np.save(os.path.join(log_dir, 'loss.npy'), losses)

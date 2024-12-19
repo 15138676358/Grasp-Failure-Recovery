@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def generate_dataset(episodes=3000):
+def generate_dataset(episodes=30000):
     # 创建环境实例
     env = gymnasium.make(id='GraspEnv_v3', render_mode='rgb_array')
     # 初始化数据集
@@ -63,7 +63,7 @@ def generate_dataset(episodes=3000):
                 break
         if _ % 100 == 0:
             print(f"Processed {_}/{episodes} episodes")
-    print(f"成功率: {success / episodes:.2f}%")
+    print(f"成功率: {100 * success / episodes:.2f}%")
 
     # 将数据集转换为 numpy 数组
     dataset['attempts'] = np.array(dataset['attempts'])
@@ -76,8 +76,8 @@ def generate_dataset(episodes=3000):
     dataset['com'] = np.array(dataset['com'])
 
     # 保存数据集到文件
-    np.savez('./dataset/offline_dataset/train_dataset_v3.npz', **dataset)
-    print(f"{dataset['attempts'].shape[0]} data saved to ./dataset/offline_dataset/train_dataset_v3.npz")
+    np.savez('./dataset/offline_dataset/eval_dataset_v3.npz', **dataset)
+    print(f"{dataset['attempts'].shape[0]} data saved to ./dataset/offline_dataset/eval_dataset_v3.npz")
 
 if __name__ == '__main__':
     generate_dataset()

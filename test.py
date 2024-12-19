@@ -38,20 +38,23 @@ def test_env_v1():
     print(f'Success Rate: {np.sum(success) / 100}')
 
 def test_env_v2_and_v3():
-    agent = graspagents.GraspAgent({'env': 'GraspEnv_v3', 'model': 'Dirnet'})
-    env = gymnasium.make(id='GraspEnv_v2', render_mode='human')
-    num_trials = 10
+    agent = graspagents.GraspAgent({'env': 'GraspEnv_v3', 'model': 'Transnet'})
+    env = gymnasium.make(id='GraspEnv_v3', render_mode='rgb_array')
+    num_trials = 100
     attempts, returns, success = np.zeros((num_trials)), np.zeros((num_trials)), np.zeros((num_trials))
     video_writer = cv2.VideoWriter(filename='video.mp4', fourcc=cv2.VideoWriter_fourcc(*'XVID'), fps=5, frameSize=(500, 500))
     for i in range(num_trials):
-        contour, convex = graspenvs.utils.generate_contour()
-        agent.reset(contour, convex)
+        while True:
+            contour, convex = graspenvs.utils.generate_contour()
+            agent.reset(contour, convex)
+            if agent.env.state['candidate_actions'].shape[0] > 0:
+                break
         env.initialize_state(contour, convex)
         env.reset()
         while True:
             # 随机选择一个动作
-            # action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
-            action = agent.choose_action()
+            action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
+            # action = agent.choose_action()
             state, reward, done, truncated, info = env.step(action)
             agent.update(action, env.state['history'][env.state['attempt'] - 1, -1])
             frame = env.render()  # 获取渲染帧
@@ -68,7 +71,7 @@ def test_env_v2_and_v3():
 
     print(f'Average Attempts: {attempts.mean()}')
     print(f'Average Returns: {returns.mean()}')
-    print(f'Success Rate: {np.sum(success) / num_trials}')
+    print(f'Success Rate: {100 * np.sum(success) / num_trials}%')
 
 
 if __name__ == '__main__':
