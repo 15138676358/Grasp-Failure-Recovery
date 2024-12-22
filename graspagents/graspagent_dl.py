@@ -14,7 +14,7 @@ import models
 import numpy as np
 import torch
 
-class GraspAgent:
+class GraspAgent_dl:
     def __init__(self, config):
         self.env = gymnasium.make(id=config['env'], render_mode='rgb_array')
         self.model = load_model(config)
@@ -26,6 +26,7 @@ class GraspAgent:
         with torch.no_grad():
             output = self.model(observations, candidate_actions)
         scores = output.squeeze().cpu().numpy()
+        self.scores = scores
         
         return scores
     

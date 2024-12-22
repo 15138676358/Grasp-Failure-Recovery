@@ -154,7 +154,7 @@ def main():
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=1e-6)
     # 训练模型
-    train_losses, eval_losses_mean, eval_losses_std = train(model, criterion, optimizer, scheduler, train_loader, eval_loader, epochs=100)
+    train_losses, eval_losses_mean, eval_losses_std = train(model, criterion, optimizer, scheduler, train_loader, eval_loader, epochs=200)
     # 保存模型和训练结果
     losses = {'train_losses': np.array(train_losses), 'eval_losses_mean': np.array(eval_losses_mean), 'eval_losses_std': np.array(eval_losses_std)}
     np.save(os.path.join(log_dir, 'loss.npy'), losses)
