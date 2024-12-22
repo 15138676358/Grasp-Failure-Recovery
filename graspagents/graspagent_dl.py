@@ -43,8 +43,9 @@ class GraspAgent_dl:
         self.env.state['attempt'] += 1
 
     def reset(self, contour, convex):
-        self.env.initialize_state(contour, convex)
         self.env.reset()
+        self.env.initialize_state(contour, convex)
+        
 
 def load_model(config):
     env_id, model_id = config['env'], config['model']

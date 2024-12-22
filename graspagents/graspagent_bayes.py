@@ -105,8 +105,8 @@ class GraspAgent_bayes:
                 self.sigma[i, j] = np.clip(self.sigma[i, j], 0.0001, np.random.uniform(0.1, 1000))
 
     def reset(self, contour, convex): # 将mu初始化为形心
-        self.env.initialize_state(contour, convex)
         self.env.reset()
-        geometric_center = np.mean(contour, axis=0) # 根据contour计算形心
+        self.env.initialize_state(contour, convex) # contour: 100*3, convex: 8*2
+        geometric_center = np.mean(contour[:, :2], axis=0) # 根据contour计算形心
         self.mu = np.array([0.5, geometric_center[0], geometric_center[1]])
         self.sigma = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])

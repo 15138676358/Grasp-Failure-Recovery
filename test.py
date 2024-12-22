@@ -41,7 +41,8 @@ def test_env_v1():
 
 def test_env_v2_and_v3():
     # agent = graspagents.GraspAgent_dl({'env': 'GraspEnv_v3', 'model': 'Transnet'})
-    agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
+    # agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
+    agent = graspagents.GraspAgent_rl({'env': 'GraspEnv_v3', 'model': 'PPO'})
     env = gymnasium.make(id='GraspEnv_v3', render_mode='rgb_array')
     num_tasks, num_trials = 100, 1
     attempts, returns, success = np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials))
@@ -49,19 +50,18 @@ def test_env_v2_and_v3():
     video_writer = cv2.VideoWriter(filename='video.mp4', fourcc=cv2.VideoWriter_fourcc(*'XVID'), fps=5, frameSize=(500, 500))
     for i in range(num_tasks):
         while True:
-            contour, convex = graspenvs.utils.generate_contour()
+            env.reset()
+            contour, convex = env.state['contour'].copy(), env.state['convex'].copy()
             agent.reset(contour, convex)
             if agent.env.state['candidate_actions'].shape[0] > 0:
                 break
-        env.initialize_state(contour, convex)
-        env.reset()
         for j in range(num_trials):
             env.state['attempt'], env.state['history'] = 0, np.zeros((env.max_steps, 4))
             agent.env.state['attempt'], agent.env.state['history'] = 0, np.zeros((agent.env.max_steps, 4))
             while True:
                 # 随机选择一个动作
-                action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
-                # action = agent.choose_action()
+                # action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
+                action = agent.choose_action()
                 next_observation, reward, done, truncated, info = env.step(action)
                 agent.update(action, env.state['history'][env.state['attempt'] - 1, -1])
                 frame = env.render()  # 获取渲染帧
