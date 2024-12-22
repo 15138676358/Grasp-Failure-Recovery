@@ -40,9 +40,10 @@ def test_env_v1():
     print(f'Success Rate: {np.sum(success) / 100}')
 
 def test_env_v2_and_v3():
-    agent = graspagents.GraspAgent_dl({'env': 'GraspEnv_v3', 'model': 'Transnet'})
+    # agent = graspagents.GraspAgent_dl({'env': 'GraspEnv_v3', 'model': 'Transnet'})
+    agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
     env = gymnasium.make(id='GraspEnv_v3', render_mode='rgb_array')
-    num_tasks, num_trials = 1, 100
+    num_tasks, num_trials = 100, 1
     attempts, returns, success = np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials))
     w = []
     video_writer = cv2.VideoWriter(filename='video.mp4', fourcc=cv2.VideoWriter_fourcc(*'XVID'), fps=5, frameSize=(500, 500))
@@ -59,24 +60,25 @@ def test_env_v2_and_v3():
             agent.env.state['attempt'], agent.env.state['history'] = 0, np.zeros((agent.env.max_steps, 4))
             while True:
                 # 随机选择一个动作
-                # action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
-                action = agent.choose_action()
+                action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
+                # action = agent.choose_action()
                 next_observation, reward, done, truncated, info = env.step(action)
                 agent.update(action, env.state['history'][env.state['attempt'] - 1, -1])
                 frame = env.render()  # 获取渲染帧
                 # 将帧写入视频文件
                 video_writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                 if done or truncated:
-                    attempts[num_tasks * i + j] = env.state['attempt']
-                    success[num_tasks * i + j] = done and not truncated
+                    attempts[num_trials * i + j] = env.state['attempt']
+                    success[num_trials * i + j] = done and not truncated
+                    print(f'Task {i + 1}, Trial {j + 1}, Attempts: {env.state["attempt"]}, Success: {done and not truncated}')
                     break
-            if done and not truncated:
-                w.append(agent.scores)    
+            # if done and not truncated:
+            #     w.append(agent.scores)    
     
     # 释放视频写入对象并关闭环境
     video_writer.release()
     cv2.destroyAllWindows()
-    w = np.array(w)
+    # w = np.array(w)
     print(f'Average Attempts: {attempts.mean()}')
     print(f'Average Returns: {returns.mean()}')
     print(f'Success Rate: {100 * np.sum(success) / (num_tasks * num_trials)}%')

@@ -1,10 +1,10 @@
 """
-GraspAgent
+GraspAgent_dl
 Created by Yue Wang on 2024-11-10
 Version 1.1
 config = {'env': 'GraspEnv_v1/v2/v3', 'model': 'Random/'SegmentNet/TransformerNet/CuriosityNet/DirectNet'}
 Note:
-env在这里只起到一个数据容器的作用, 在执行一次抓取后, 通过实际反馈更新env, 不用env内部的step函数更新
+env在这里只起到一个数据容器的作用, 保存候选抓取。在执行一次抓取后, 通过实际反馈更新env, 用于返回观测。不用env内部的step函数更新
 """
 
 import graspenvs
