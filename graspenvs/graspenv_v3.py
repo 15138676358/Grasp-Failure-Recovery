@@ -23,9 +23,9 @@ class GraspEnv_v3(gymnasium.Env):
         super(GraspEnv_v3, self).__init__()
         self.max_steps = 15
         self.render_mode = render_mode
-        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
-        self.observation_space = spaces.Box(low=-10, high=10, shape=(76, ))
-        self.action_space = spaces.Box(low=-10, high=10, shape=(3, ))
+        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=0, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=0, high=10, shape=(self.max_steps, 4))}
+        self.observation_space = spaces.Box(low=0, high=10, shape=(76, ))
+        self.action_space = spaces.Box(low=0, high=10, shape=(3, ))
     
     def get_observation(self):
         return np.concatenate((self.state['convex'].reshape(-1), self.state['history'].reshape(-1)))
@@ -62,10 +62,14 @@ class GraspEnv_v3(gymnasium.Env):
         return self.get_observation(), self.compute_reward(force), self.is_done(force), self.is_truncated(force), self.get_info()
     
     def reset(self, seed=None): # initialize the contour 
-        contour, convex = utils.generate_contour()
-        contour = utils.interpolate_contour(contour)
-        contour = utils.add_normal_to_contour(contour)
-        self.initialize_state(contour, convex)
+        while True:
+            contour, convex = utils.generate_contour()
+            contour = utils.interpolate_contour(contour)
+            contour = utils.add_normal_to_contour(contour)
+            self.initialize_state(contour, convex)
+            if self.state['candidate_actions'].shape[0] > 0:
+                break
+            
         return self.get_observation(), self.get_info()
     
     def render(self):
