@@ -32,7 +32,7 @@ def cosine_schedule(initial_value):
 # 定义命令行参数
 parser = argparse.ArgumentParser()
 parser.add_argument('--env', type=str, default='GraspEnv_v3', help='environment name')
-parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--algorithm', type=str, default='SAC', help='algorithm type')
 args = parser.parse_args()
@@ -56,11 +56,11 @@ model = graspagents.GraspSAC(
     learning_rate=exponential_schedule(args.lr), 
     batch_size=args.batch_size, 
     buffer_size=30000, 
-    learning_starts=30000, 
+    learning_starts=10, 
     action_noise = NormalActionNoise(mean=np.zeros(3), sigma=0.01 * np.ones(3)), policy_kwargs=dict(net_arch=[256, 256, 256]))
 # model = graspagents.GraspPPO(graspagents.GraspPPOPolicy, train_env, verbose=1)
 model.set_logger(new_logger)
-model.learn(total_timesteps=100000, callback=eval_callback)
+model.learn(total_timesteps=10000, callback=eval_callback)
 model.save(os.path.join(log_dir, "model_final"))
 
 

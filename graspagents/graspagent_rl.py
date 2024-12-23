@@ -192,10 +192,8 @@ class GraspActor(Actor):
         features = self.extract_features(obs, self.features_extractor)
         latent_pi = self.latent_pi(features)
         mean_actions, log_std = self.mu(latent_pi), self.log_std(latent_pi)
-        
         # log_std = th.clamp(log_std, -20, 2)
         distribution = self.action_dist.proba_distribution(mean_actions, log_std)
-        distribution.epsilon = 0  # 
         candidate_actions = th.tensor(candidate_actions, dtype=th.float32).to(device='cuda')
         residual_actions = candidate_actions - mean_actions
         residual_actions[:, 2] = residual_actions[:, 2] / (2 * np.pi)
@@ -211,7 +209,6 @@ class GraspActor(Actor):
         topk = th.argsort(scores)[-100:]
         topk_probs = scores[topk] / th.sum(scores[topk])
         action = candidate_actions[topk[th.multinomial(topk_probs, 1)]]
-        
         log_prob = distribution.log_prob(action)
         return action, log_prob, log_prob
 
@@ -274,15 +271,16 @@ class GraspSAC(SAC):
 
         # Rescale the action from [low, high] to [-1, 1]
         if isinstance(self.action_space, spaces.Box):
-            scaled_action = self.policy.scale_action(unscaled_action)
+            # scaled_action = self.policy.scale_action(unscaled_action)
+            scaled_action = unscaled_action  # Modified by Yue Wang
 
             # Add noise to the action (improve exploration)
             if action_noise is not None:
-                scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
+                scaled_action = scaled_action + action_noise()  # Modified by Yue Wang
 
             # We store the scaled action in the buffer
             buffer_action = scaled_action
-            action = self.policy.unscale_action(scaled_action)
+            action = scaled_action
         else:
             # Discrete case, no need to normalize or clip
             buffer_action = unscaled_action
