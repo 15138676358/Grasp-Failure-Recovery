@@ -195,10 +195,10 @@ class GraspActor(Actor):
         
         # log_std = th.clamp(log_std, -20, 2)
         distribution = self.action_dist.proba_distribution(mean_actions, log_std)
-        distribution.epsilon = 3  # 
+        distribution.epsilon = 0  # 
         candidate_actions = th.tensor(candidate_actions, dtype=th.float32).to(device='cuda')
         residual_actions = candidate_actions - mean_actions
-        residual_actions[:, 2] = residual_actions[:, 2] % (2 * np.pi)
+        residual_actions[:, 2] = residual_actions[:, 2] / (2 * np.pi)
         scores = th.exp(distribution.log_prob(candidate_actions - mean_actions))
         scores = th.nan_to_num(scores, nan=0.01)  # Modified by Yue Wang
         if th.isnan(scores).any():

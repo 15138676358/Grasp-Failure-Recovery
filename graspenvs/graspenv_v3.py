@@ -52,7 +52,7 @@ class GraspEnv_v3(gymnasium.Env):
     
     def compute_reward(self, force):
         # calculate the reward
-        return np.abs(force / self.state['mass'][0]) * np.abs(force / self.state['mass'][0]) + 1 * (np.abs(force - self.state['mass'][0]) < 0.05) - 1 - 0 * (force < 0.1)
+        return np.abs(force / self.state['mass'][0]) * np.abs(force / self.state['mass'][0]) + 1 * (np.abs(force / self.state['mass'][0]) > 0.9) - 1 - 0 * (force < 0.1)
     
     def step(self, action):
         force = self.compute_force(action)
