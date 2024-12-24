@@ -42,7 +42,7 @@ def test_env_v1():
 def test_env_v2_and_v3():
     # agent = graspagents.GraspAgent_dl({'env': 'GraspEnv_v3', 'model': 'Transnet'})
     # agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
-    agent = graspagents.GraspAgent_rl({'env': 'GraspEnv_v3', 'model': 'PPO'})
+    agent = graspagents.GraspAgent_rl({'env': 'GraspEnv_v3', 'model': 'SAC'})
     env = gymnasium.make(id='GraspEnv_v3', render_mode='rgb_array')
     num_tasks, num_trials = 100, 1
     attempts, returns, success = np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials))
@@ -61,7 +61,7 @@ def test_env_v2_and_v3():
             while True:
                 # 随机选择一个动作
                 # action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
-                action = agent.choose_action()
+                action = agent.choose_action()[0]
                 next_observation, reward, done, truncated, info = env.step(action)
                 agent.update(action, env.state['history'][env.state['attempt'] - 1, -1])
                 frame = env.render()  # 获取渲染帧

@@ -21,11 +21,11 @@ class GraspEnv_v3(gymnasium.Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
     def __init__(self, render_mode='human'):
         super(GraspEnv_v3, self).__init__()
-        self.max_steps = 15
+        self.max_steps = 10
         self.render_mode = render_mode
-        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=0, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=0, high=10, shape=(self.max_steps, 4))}
-        self.observation_space = spaces.Box(low=0, high=10, shape=(76, ))
-        self.action_space = spaces.Box(low=0, high=10, shape=(3, ))
+        self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=0, high=1, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=0, high=1, shape=(self.max_steps, 4))}
+        self.observation_space = spaces.Box(low=0, high=1, shape=(56, ))
+        self.action_space = spaces.Box(low=0, high=1, shape=(3, ))
     
     def get_observation(self):
         return np.concatenate((self.state['convex'].reshape(-1), self.state['history'].reshape(-1)))
@@ -55,6 +55,10 @@ class GraspEnv_v3(gymnasium.Env):
         return np.abs(force / self.state['mass'][0]) * np.abs(force / self.state['mass'][0]) + 1 * (np.abs(force / self.state['mass'][0]) > 0.9) - 1 - 0 * (force < 0.1)
     
     def step(self, action):
+        # 计算action与candidate_actions的距离
+        distances = np.linalg.norm(self.state['candidate_actions'][:, 0:2] - action[0:2], axis=1)
+        index = np.argmin(distances)  # 选择最近的候选动作
+        action = self.state['candidate_actions'][index]
         force = self.compute_force(action)
         self.state['history'][self.state['attempt']] = np.array([action[0], action[1], action[2], force])
         self.state['attempt'] += 1

@@ -6,7 +6,7 @@ import gymnasium
 import numpy as np
 import os
 import torch
-from stable_baselines3 import PPO, SAC
+from stable_baselines3 import PPO, SAC, DQN
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.callbacks import EvalCallback
@@ -38,7 +38,7 @@ parser.add_argument('--algorithm', type=str, default='SAC', help='algorithm type
 args = parser.parse_args()
 log_dir = f'./checkpoint/{args.env}/rl/{args.algorithm}/lr_{args.lr}_bs_{args.batch_size}'
 os.makedirs(log_dir, exist_ok=True)
-new_logger = configure(log_dir, ["stdout", "csv", "tensorboard"])
+new_logger = configure(log_dir, ["stdout", "csv"])
 
 train_env = gymnasium.make(id=args.env, render_mode='rgb_array')
 train_env = DummyVecEnv([lambda: train_env])
@@ -49,16 +49,26 @@ eval_callback = EvalCallback(eval_env, best_model_save_path=log_dir,
                              log_path=log_dir, eval_freq=100,
                              n_eval_episodes=10, deterministic=True, render=False)
 
-model = graspagents.GraspSAC(
-    graspagents.GraspSACPolicy, 
+# model = graspagents.GraspSAC(
+#     graspagents.GraspSACPolicy, 
+#     train_env, 
+#     verbose=1, 
+#     learning_rate=exponential_schedule(args.lr), 
+#     batch_size=args.batch_size, 
+#     buffer_size=30000, 
+#     learning_starts=30000, 
+#     action_noise = NormalActionNoise(mean=np.zeros(3), sigma=0.01 * np.ones(3)), policy_kwargs=dict(net_arch=[128, 128, 128]))
+model = SAC(
+    'MlpPolicy', 
     train_env, 
     verbose=1, 
     learning_rate=exponential_schedule(args.lr), 
     batch_size=args.batch_size, 
     buffer_size=30000, 
-    learning_starts=10, 
-    action_noise = NormalActionNoise(mean=np.zeros(3), sigma=0.01 * np.ones(3)), policy_kwargs=dict(net_arch=[256, 256, 256]))
+    learning_starts=3000, 
+    action_noise = NormalActionNoise(mean=np.zeros(3), sigma=0.01 * np.ones(3)), policy_kwargs=dict(net_arch=[128, 128, 128]))
 # model = graspagents.GraspPPO(graspagents.GraspPPOPolicy, train_env, verbose=1)
+# model = DQN('MlpPolicy', train_env, verbose=1, learning_rate=exponential_schedule(args.lr), batch_size=args.batch_size, buffer_size=30000, learning_starts=3000, policy_kwargs=dict(net_arch=[128, 128, 128]))
 model.set_logger(new_logger)
 model.learn(total_timesteps=10000, callback=eval_callback)
 model.save(os.path.join(log_dir, "model_final"))

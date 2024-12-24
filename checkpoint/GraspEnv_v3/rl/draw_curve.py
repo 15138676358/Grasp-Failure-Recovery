@@ -26,7 +26,7 @@ def sb3_draw_train_curve(log_dir):
     success_rate = []
     for i in range(len(mean_ep_length) // 100):
         sample_list = mean_ep_length[100 * i : 100 * (i + 1)]
-        success_rate.append(len([x for x in sample_list if x < 14]) / 100)
+        success_rate.append(len([x for x in sample_list if x < 10]) / 100)
     axs[2].plot(success_rate)
     axs[2].set_title('Success Rate')
     axs[2].set_xlabel('100*Episodes')
@@ -72,6 +72,6 @@ def sb3_draw_eval_curve(log_dir):
 
 
 if __name__ == '__main__':
-    log_dir = './checkpoint/GraspEnv_v3/rl/SAC/lr_0.001_bs_512'
+    log_dir = './checkpoint/GraspEnv_v3/rl/SAC/lr_0.0001_bs_512'
     sb3_draw_train_curve(log_dir)
     # sb3_draw_eval_curve(log_dir)

@@ -26,7 +26,7 @@ class GraspAgent_rl:
     
     def choose_action(self):
         observation = self.env.get_observation()
-        action = self.model.predict(observation, deterministic=False)
+        action, _ = self.model.predict(observation, deterministic=False)
 
         return action
 
@@ -192,24 +192,28 @@ class GraspActor(Actor):
         features = self.extract_features(obs, self.features_extractor)
         latent_pi = self.latent_pi(features)
         mean_actions, log_std = self.mu(latent_pi), self.log_std(latent_pi)
-        # log_std = th.clamp(log_std, -20, 2)
+        # print(f'mean_actions: {mean_actions}, log_std: {log_std}')
+        mean_actions = th.sigmoid(mean_actions)
+        log_std = th.clamp(log_std, -20, 2)
         distribution = self.action_dist.proba_distribution(mean_actions, log_std)
-        candidate_actions = th.tensor(candidate_actions, dtype=th.float32).to(device='cuda')
-        residual_actions = candidate_actions - mean_actions
-        residual_actions[:, 2] = residual_actions[:, 2] / (2 * np.pi)
-        scores = th.exp(distribution.log_prob(candidate_actions - mean_actions))
+        unscaled_candidate_actions = th.tensor(candidate_actions.copy(), dtype=th.float32).to(device='cuda')
+        scaled_candidate_actions = th.tensor(candidate_actions.copy(), dtype=th.float32).to(device='cuda')
+        scaled_candidate_actions[:, 2] = scaled_candidate_actions[:, 2] / (2 * np.pi)
+        scores = th.exp(distribution.log_prob(scaled_candidate_actions,scaled_candidate_actions))  # Modified by Yue Wang
         scores = th.nan_to_num(scores, nan=0.01)  # Modified by Yue Wang
-        if th.isnan(scores).any():
+        scores = th.clamp(scores, 0.01, 1)  # Modified by Yue Wang
+        if th.isnan(scores).any() or th.isinf(scores).any():
             print(f'mean_actions: {mean_actions}, log_std: {log_std}')
             print(f'candidate_actions: {candidate_actions}, mean_actions: {mean_actions}, log_std: {log_std}, scores: {scores}')
-        # can = candidate_actions.cpu().numpy()
+        # can = scaled_candidate_actions.cpu().numpy()
         # sco = scores.cpu().detach().numpy()
         # plt.scatter(can[:, 0], can[:, 1], c=sco)
         # plt.savefig('scores.png')  # Modified by Yue Wang, for debugging
         topk = th.argsort(scores)[-100:]
         topk_probs = scores[topk] / th.sum(scores[topk])
-        action = candidate_actions[topk[th.multinomial(topk_probs, 1)]]
-        log_prob = distribution.log_prob(action)
+        index = th.multinomial(topk_probs, 1)
+        action = unscaled_candidate_actions[topk[index]]
+        log_prob = distribution.log_prob(scaled_candidate_actions[topk[index]], scaled_candidate_actions[topk[index]])
         return action, log_prob, log_prob
 
 class GraspSACPolicy(SACPolicy):
@@ -389,7 +393,7 @@ def load_model(env, config):
     if model_id == 'PPO':
         model = GraspPPO(GraspPPOPolicy, env, verbose=1)
     elif model_id == 'SAC':
-        model = GraspPPO(GraspPPOPolicy, env, verbose=1)
+        model = GraspSAC(GraspSACPolicy, env, verbose=1)
     model.load(f'./checkpoint/{env_id}/rl/{model_id}/model_best')
     
     return model
