@@ -16,7 +16,6 @@ def generate_contour():
     pt2 = center + length / 2 * t_vec - width / 2 * n_vec
     pt3 = center - length / 2 * t_vec - width / 2 * n_vec
     pt4 = center - length / 2 * t_vec + width / 2 * n_vec
-    rectangle1 = np.array([pt1, pt2, pt3, pt4]).copy()
 
     # initialize the size of the co-rectangles
     co_length = np.random.uniform(0, 30, 2) / 50
@@ -31,7 +30,6 @@ def generate_contour():
     pt10 = center + offset * t_vec - co_width / 2 * t_vec + width / 2 * n_vec
     pt11 = center + offset * t_vec - co_width / 2 * t_vec - width / 2 * n_vec
     pt12 = center + offset * t_vec - co_width / 2 * t_vec - co_length[1] / 2 * n_vec
-    rectangle2 = np.array([pt5, pt8, pt12, pt9]).copy()
 
     # merge the points
     if co_length[0] / 2 < width / 2:
@@ -67,13 +65,6 @@ def generate_contour():
     sample_y = fy(sample_distances)
     contour = np.column_stack((sample_x, sample_y))
     convex = np.array(right_convex + left_convex)
-    # scale the contour to 0-1
-    scale = np.max((contour.max(axis=0) - contour.min(axis=0)))
-    scale_point = contour.min(axis=0)
-    contour = (contour - scale_point) / scale
-    convex = (convex - scale_point) / scale
-    rectangle1 = (rectangle1 - scale_point) / scale
-    rectangle2 = (rectangle2 - scale_point) / scale
 
     return contour, convex
 

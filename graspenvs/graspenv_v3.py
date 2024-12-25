@@ -122,6 +122,12 @@ class GraspEnv_v3(gymnasium.Env):
             return frame
         
     def initialize_state(self, contour, convex): # initialize the state
+        # scale the contour to 0-1
+        scale = np.max((contour[:, :2].max(axis=0) - contour[:, :2].min(axis=0)))
+        scale_point = contour[:, :2].min(axis=0)
+        contour[:, :2] = (contour[:, :2] - scale_point) / scale
+        convex = (convex - scale_point) / scale
+        # calculate the candidate actions
         candidate_actions = calculate_candidate_actions(contour)
         # initialize the mass and com
         mass = np.array([np.random.uniform(5, 25)]) / 25

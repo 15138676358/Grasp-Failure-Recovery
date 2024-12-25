@@ -24,7 +24,7 @@ class GraspEnv_v2(gymnasium.Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
     def __init__(self, render_mode='human'):
         super(GraspEnv_v2, self).__init__()
-        self.max_steps = 15
+        self.max_steps = 10
         self.render_mode = render_mode
         self.state_space = {'contour': spaces.Box(low=0, high=1, shape=(100, 3)), 'convex': spaces.Box(low=0, high=1, shape=(8, 2)), 'candidate_actions': spaces.Box(low=-10, high=10, shape=(3, )), 'mass': spaces.Box(low=0, high=1, shape=(1, )), 'com': spaces.Box(low=0, high=1, shape=(2, )), 'attempt': spaces.Discrete(1), 'history': spaces.Box(low=-10, high=10, shape=(self.max_steps, 4))}
         self.observation_space = spaces.Box(low=0, high=1, shape=(76, ))
@@ -58,13 +58,25 @@ class GraspEnv_v2(gymnasium.Env):
         return np.abs(force / self.state['mass'][0]) * np.abs(force / self.state['mass'][0]) + 1 * (np.abs(force - self.state['mass'][0]) < 0.05) - 1 - 0 * (force < 0.1)
     
     def step(self, action):
+        # 计算action与candidate_actions的距离
+        distances = np.linalg.norm(self.state['candidate_actions'][:, 0:2] - action[0:2], axis=1)
+        index = np.argmin(distances)  # 选择最近的候选动作
+        action = self.state['candidate_actions'][index]
         force = self.compute_force(action)
         self.state['history'][self.state['attempt']] = np.array([action[0], action[1], action[2], force])
         self.state['attempt'] += 1
 
         return self.get_observation(), self.compute_reward(force), self.is_done(force), self.is_truncated(force), self.get_info()
     
-    def reset(self, seed=None):
+    def reset(self, seed=None, options=None):
+        while True:
+            contour, convex = utils.generate_contour()
+            contour = utils.interpolate_contour(contour)
+            contour = utils.add_normal_to_contour(contour)
+            self.initialize_state(contour, convex)
+            if self.state['candidate_actions'].shape[0] > 0:
+                break
+
         return self.get_observation(), self.get_info()
     
     def render(self):
@@ -100,15 +112,18 @@ class GraspEnv_v2(gymnasium.Env):
             return frame
         
     def initialize_state(self, contour, convex):
-        # initialize the candidate actions
-        contour = utils.interpolate_contour(contour)
-        contour = utils.add_normal_to_contour(contour)
+        # scale the contour to 0-1
+        scale = np.max((contour[:, :2].max(axis=0) - contour[:, :2].min(axis=0)))
+        scale_point = contour[:, :2].min(axis=0)
+        contour[:, :2] = (contour[:, :2] - scale_point) / scale
+        convex = (convex - scale_point) / scale
+        # calculate the candidate actions
         candidate_actions = calculate_candidate_actions(contour)
         # initialize the mass and com
         mass = np.array([np.random.uniform(5, 25)]) / 25
         while True:
             com = np.random.uniform(0, 50, 2) / 50
-            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour[:, :2] - com, axis=1).min() > 0.01:
+            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour[:, 0:2] - com, axis=1).min() > 0.01:
                 break
         self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
 
@@ -177,18 +192,18 @@ def calculate_rectangles(contour):
     # 分类讨论：2-2，3-3，4-3，3-4，4-4
     if len(intercept_list_theta1) == 2 and len(intercept_list_theta2) == 2:
         # 只有一个矩形2-2，将截距个数较多的倾角作为矩形倾角
-        if np.count_nonzero(indices1) > np.count_nonzero(indices2):
-            theta2 = theta1        
+        if np.count_nonzero(indices1) > np.count_nonzero(indices2): 
             rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
+            theta2 = theta1
         else:
-            theta1 = theta2
             rectangle1 = calculate_intersections([[primary_intercept_theta2[0][0], theta2], [primary_intercept_theta2[1][0], theta2]], [[secondary_intercept_theta1[0][0], theta1], [secondary_intercept_theta1[1][0], theta1]])
+            theta1 = theta2
         rectangle2, rectangle_collision = np.array([[0, 0]] * 4), np.array([[0, 0]] * 4)
     else:
         # 有两个矩形3-3，4-3，3-4，4-4，设置碰撞检测区
         rectangle1 = calculate_intersections([[primary_intercept_theta1[0][0], theta1], [primary_intercept_theta1[1][0], theta1]], [[secondary_intercept_theta2[0][0], theta2], [secondary_intercept_theta2[1][0], theta2]])
         rectangle2 = calculate_intersections([[primary_intercept_theta2[0][0], theta2], [primary_intercept_theta2[1][0], theta2]], [[secondary_intercept_theta1[0][0], theta1], [secondary_intercept_theta1[1][0], theta1]])
-        collision_offset_theta1 = np.sign(primary_intercept_theta1[0][0] - primary_intercept_theta1[1][0]) * 0.05
+        collision_offset_theta1 = np.sign(primary_intercept_theta1[0][0] - primary_intercept_theta1[1][0]) * 0.05  # Modified by Yue Wang
         collision_offset_theta2 = np.sign(primary_intercept_theta2[0][0] - primary_intercept_theta2[1][0]) * 0.05
         rectangle_collision = calculate_intersections([[primary_intercept_theta1[0][0] + collision_offset_theta1, theta1], [primary_intercept_theta1[1][0] - collision_offset_theta1, theta1]], [[primary_intercept_theta2[0][0] + collision_offset_theta2, theta2], [primary_intercept_theta2[1][0] - collision_offset_theta2, theta2]])
 
