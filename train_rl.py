@@ -65,12 +65,13 @@ model = SAC(
     learning_rate=exponential_schedule(args.lr), 
     batch_size=args.batch_size, 
     buffer_size=30000, 
-    learning_starts=3000, 
-    action_noise = NormalActionNoise(mean=np.zeros(3), sigma=0.01 * np.ones(3)), policy_kwargs=dict(net_arch=[128, 128, 128]))
+    learning_starts=30000, 
+    action_noise = NormalActionNoise(mean=np.zeros(3), sigma=0.01 * np.ones(3)), 
+    policy_kwargs=dict(net_arch=[64, 128, 64]))
 # model = graspagents.GraspPPO(graspagents.GraspPPOPolicy, train_env, verbose=1)
 # model = DQN('MlpPolicy', train_env, verbose=1, learning_rate=exponential_schedule(args.lr), batch_size=args.batch_size, buffer_size=30000, learning_starts=3000, policy_kwargs=dict(net_arch=[128, 128, 128]))
 model.set_logger(new_logger)
-model.learn(total_timesteps=10000, callback=eval_callback)
+model.learn(total_timesteps=200000, callback=eval_callback)
 model.save(os.path.join(log_dir, "model_final"))
 
 

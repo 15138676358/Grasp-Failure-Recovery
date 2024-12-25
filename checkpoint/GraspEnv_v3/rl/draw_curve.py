@@ -26,7 +26,7 @@ def sb3_draw_train_curve(log_dir):
     success_rate = []
     for i in range(len(mean_ep_length) // 100):
         sample_list = mean_ep_length[100 * i : 100 * (i + 1)]
-        success_rate.append(len([x for x in sample_list if x < 10]) / 100)
+        success_rate.append(len([x for x in sample_list if x < 9]) / 100)
     axs[2].plot(success_rate)
     axs[2].set_title('Success Rate')
     axs[2].set_xlabel('100*Episodes')

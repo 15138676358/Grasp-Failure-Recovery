@@ -65,7 +65,7 @@ class GraspEnv_v3(gymnasium.Env):
 
         return self.get_observation(), self.compute_reward(force), self.is_done(force), self.is_truncated(force), self.get_info()
     
-    def reset(self, seed=None): # initialize the contour 
+    def reset(self, seed=None, options=None): # initialize the contour 
         while True:
             contour, convex = utils.generate_contour()
             contour = utils.interpolate_contour(contour)
