@@ -43,7 +43,7 @@ class GraspAgent_bayes:
         topk_probs = scores[topk] / np.sum(scores[topk])
         action = self.env.state['candidate_actions'][np.random.choice(topk, p=topk_probs)]
 
-        return action
+        return [action]
     
     def sigma_x_samples(self, H=100): # 从信念分布中按照sigma规则采样H个状态点
         filtered_x_samples = []
