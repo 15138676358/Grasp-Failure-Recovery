@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import graspenvs
 import gymnasium
-import graspenvs.utils
 import graspagents
 
 
@@ -41,9 +40,9 @@ def test_env_v1():
 
 def test_env_v2_and_v3():
     # agent = graspagents.GraspAgent_dl({'env': 'GraspEnv_v3', 'model': 'Transnet'})
-    # agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
-    agent = graspagents.GraspAgent_rl({'env': 'GraspEnv_v3', 'model': 'SAC'})
-    env = gymnasium.make(id='GraspEnv_v2', render_mode='rgb_array')
+    agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
+    # agent = graspagents.GraspAgent_rl({'env': 'GraspEnv_v3', 'model': 'SAC'})
+    env = gymnasium.make(id='GraspEnv_v3', render_mode='rgb_array')
     num_tasks, num_trials = 100, 1
     attempts, returns, success = np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials))
     w = []

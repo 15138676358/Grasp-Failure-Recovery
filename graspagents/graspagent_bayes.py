@@ -14,9 +14,7 @@ import graspenvs
 import gymnasium
 import matplotlib.path as mplPath
 import matplotlib.pyplot as plt
-import models
 import numpy as np
-import torch
 
 class GraspAgent_bayes:
     def __init__(self, config):
