@@ -19,6 +19,7 @@ import numpy as np
 class GraspAgent_bayes:
     def __init__(self, config):
         self.env = gymnasium.make(id=config['env'], render_mode='rgb_array')
+        self.env.reset()
         self.H, self.beta = 100, 0.5 * 25
 
     def calculate_scores(self): # 计算候选抓取的分数
@@ -31,9 +32,10 @@ class GraspAgent_bayes:
         norm_com = d_com[:, :1] * t_vec[:, :1] + d_com[:, 1:] * t_vec[:, 1:]
         max_norm_point = np.max(norm_points / norm_com, axis=1) * norm_com[:, 0]
         scores = self.mu[0] * (max_norm_point - norm_com[:, 0]) / max_norm_point
-        self.scores = scores
+        self.scores = np.clip(scores, 0, 1)
+        self.env.state['scores'] = np.clip(scores, 0, 1)
 
-        return scores
+        return np.clip(scores, 0, 1)
     
     def choose_action(self, num_topk=100):
         scores = self.calculate_scores()
@@ -95,16 +97,20 @@ class GraspAgent_bayes:
         z_samples = self.calculate_z_samples(x_samples)
         w_samples = self.calculate_w_samples(z_samples, self.beta)
         self.mu = np.average(x_samples, weights=w_samples, axis=0)
-        self.sigma = np.cov(x_samples.T, aweights=w_samples) + 0.001 * np.eye(3)
+        self.sigma = np.cov(x_samples.T, aweights=w_samples) + 0.01 * np.eye(3)
         # if there exists nan or inf in the covariance matrix, replace it with 1
         self.sigma = np.nan_to_num(self.sigma)
         for i in range(3):
             for j in range(3):
                 self.sigma[i, j] = np.clip(self.sigma[i, j], 0.0001, np.random.uniform(0.1, 1000))
 
-    def reset(self, contour, convex): # 将mu初始化为形心
-        self.env.reset()
-        self.env.initialize_state(contour, convex) # contour: 100*3, convex: 8*2
+    def reset(self, contour, convex): # 将mu初始化为形心, contour应为未归一化的轮廓
+        self.env.initialize_state(contour, convex) # contour: 100*2, convex: 8*2
+        # scale the contour to 0-1
+        scale = np.max((contour[:, :2].max(axis=0) - contour[:, :2].min(axis=0)))
+        scale_point = contour[:, :2].min(axis=0)
+        contour = (contour[:, :2] - scale_point) / scale
+        convex = (convex - scale_point) / scale
         geometric_center = np.mean(contour[:, :2], axis=0) # 根据contour计算形心
         self.mu = np.array([0.5, geometric_center[0], geometric_center[1]])
         self.sigma = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])

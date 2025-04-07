@@ -55,10 +55,10 @@ class GraspEnv_v3(gymnasium.Env):
         return np.abs(force / self.state['mass'][0]) * np.abs(force / self.state['mass'][0]) + 1 * (np.abs(force / self.state['mass'][0]) > 0.9) - 1 - 0 * (force < 0.1)
     
     def step(self, action):
-        # 计算action与candidate_actions的距离
-        distances = np.linalg.norm(self.state['candidate_actions'][:, 0:2] - action[0:2], axis=1)
-        index = np.argmin(distances)  # 选择最近的候选动作
-        action = self.state['candidate_actions'][index]
+        # # 计算action与candidate_actions的距离
+        # distances = np.linalg.norm(self.state['candidate_actions'][:, 0:2] - action[0:2], axis=1)
+        # index = np.argmin(distances)  # 选择最近的候选动作
+        # action = self.state['candidate_actions'][index]
         force = self.compute_force(action)
         self.state['history'][self.state['attempt']] = np.array([action[0], action[1], action[2], force])
         self.state['attempt'] += 1
@@ -68,8 +68,6 @@ class GraspEnv_v3(gymnasium.Env):
     def reset(self, seed=None, options=None): # initialize the contour 
         while True:
             contour, convex = utils.generate_contour()
-            contour = utils.interpolate_contour(contour)
-            contour = utils.add_normal_to_contour(contour)
             self.initialize_state(contour, convex)
             if self.state['candidate_actions'].shape[0] > 0:
                 break
@@ -82,10 +80,13 @@ class GraspEnv_v3(gymnasium.Env):
         for point in self.state['contour']:
             cv2.circle(frame, (int(500 * point[0]), int(500 * point[1])), 3, (0, 255, 0), -1)  # Green point
             cv2.line(frame, (int(500 * point[0]), int(500 * point[1])), (int(500 * point[0] + 10 * np.cos(point[2])), int(500 * point[1] + 10 * np.sin(point[2]))), (0, 255, 0), 1)
-        # # draw the candidate actions
-        # for action in self.state['candidate_actions']:
-        #     cv2.circle(frame, (int(500 * action[0]), int(500 * action[1])), 3, (0, 0, 0), -1)
-        #     cv2.line(frame, (int(500 * action[0]), int(500 * action[1])), (int(500 * action[0] - 30 * np.sin(action[2])), int(500 * action[1] + 30 * np.cos(action[2]))), (0, 0, 0), 1)
+        # draw the candidate actions
+        cmap = plt.get_cmap('coolwarm')
+        for action, score in zip(self.state['candidate_actions'], self.state['scores']):
+            color = cmap(int(255 * score))[:3]
+            color = tuple(int(255 * c) for c in color)
+            cv2.circle(frame, (int(500 * action[0]), int(500 * action[1])), int(5 * score), color, -1)
+            # cv2.line(frame, (int(500 * action[0]), int(500 * action[1])), (int(500 * action[0] - 30 * np.sin(action[2])), int(500 * action[1] + 30 * np.cos(action[2]))), (0, 0, 0), 1)
         # draw the convex
         overlay = frame.copy()
         cv2.fillPoly(overlay, [np.array(500 * self.state['contour'][:, 0:2], dtype=np.int32)], (0, 0, 0))
@@ -116,7 +117,7 @@ class GraspEnv_v3(gymnasium.Env):
 
         if self.render_mode == 'human':
             cv2.imshow('Environment State', frame)
-            cv2.waitKey(100)  # wait for keyboard
+            cv2.waitKey(0)  # wait for keyboard
             return frame
         elif self.render_mode == 'rgb_array':
             return frame
@@ -125,20 +126,22 @@ class GraspEnv_v3(gymnasium.Env):
         # scale the contour to 0-1
         scale = np.max((contour[:, :2].max(axis=0) - contour[:, :2].min(axis=0)))
         scale_point = contour[:, :2].min(axis=0)
-        contour[:, :2] = (contour[:, :2] - scale_point) / scale
+        contour = (contour[:, :2] - scale_point) / scale
         convex = (convex - scale_point) / scale
         # calculate the candidate actions
-        candidate_actions = calculate_candidate_actions(contour)
+        contour = utils.interpolate_contour(contour)
+        contour = utils.add_normal_to_contour(contour)
+        candidate_actions = calculate_candidate_actions(contour, scale)
         # initialize the mass and com
         mass = np.array([np.random.uniform(5, 25)]) / 25
         while True:
             com = np.random.uniform(0, 50, 2) / 50
-            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour[:, 0:2] - com, axis=1).min() > 0.01:
+            if mplPath.Path(convex).contains_point(com) and np.linalg.norm(contour[:, 0:2] - com, axis=1).min() > 0.03:
                 break
-        self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
+        self.state = {'contour': contour, 'convex': convex, 'candidate_actions': candidate_actions, 'scores': np.zeros(candidate_actions.shape[0]), 'mass': mass, 'com': com, 'attempt': 0, 'history': np.zeros((self.max_steps, 4))}
 
 
-def calculate_candidate_actions(contour):
+def calculate_candidate_actions(contour, scale):
     # interpolate the contour with normal vectors
     # calculate the candidate actions
     p1, p2 = contour[:, np.newaxis, :], contour[np.newaxis, :, :]
@@ -149,7 +152,7 @@ def calculate_candidate_actions(contour):
     antipodal_scores = np.minimum(cos_p1, cos_p2)
 
     x, y, theta = (p1[:, :, 0] + p2[:, :, 0]) / 2, (p1[:, :, 1] + p2[:, :, 1]) / 2, angles_p1 + np.pi / 2
-    mask = (antipodal_scores > 0.9) & (distance_scores < 0.5)
+    mask = (antipodal_scores > 0.9) & (distance_scores * scale < 0.3)
     candidate_actions = np.column_stack([x[mask].reshape(-1), y[mask].reshape(-1), theta[mask].reshape(-1)])
 
     return candidate_actions

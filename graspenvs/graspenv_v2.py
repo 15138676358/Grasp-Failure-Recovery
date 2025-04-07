@@ -71,8 +71,6 @@ class GraspEnv_v2(gymnasium.Env):
     def reset(self, seed=None, options=None):
         while True:
             contour, convex = utils.generate_contour()
-            contour = utils.interpolate_contour(contour)
-            contour = utils.add_normal_to_contour(contour)
             self.initialize_state(contour, convex)
             if self.state['candidate_actions'].shape[0] > 0:
                 break
@@ -115,9 +113,11 @@ class GraspEnv_v2(gymnasium.Env):
         # scale the contour to 0-1
         scale = np.max((contour[:, :2].max(axis=0) - contour[:, :2].min(axis=0)))
         scale_point = contour[:, :2].min(axis=0)
-        contour[:, :2] = (contour[:, :2] - scale_point) / scale
+        contour = (contour[:, :2] - scale_point) / scale
         convex = (convex - scale_point) / scale
         # calculate the candidate actions
+        contour = utils.interpolate_contour(contour)
+        contour = utils.add_normal_to_contour(contour)
         candidate_actions = calculate_candidate_actions(contour)
         # initialize the mass and com
         mass = np.array([np.random.uniform(5, 25)]) / 25

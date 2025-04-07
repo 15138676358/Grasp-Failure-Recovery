@@ -9,7 +9,7 @@ import torch.nn as nn
 
 
 class TransformerNet(nn.Module):
-    def __init__(self, observation_dim=16, hidden_dim=64, output_dim=1, seq_len=15, num_heads=2, num_layers=3):
+    def __init__(self, observation_dim=16, hidden_dim=64, output_dim=1, seq_len=10, num_heads=2, num_layers=3):
         super(TransformerNet, self).__init__()
         self.seq_len = seq_len
         self.observation_dim, self.hidden_dim = observation_dim, hidden_dim

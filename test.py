@@ -9,6 +9,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import graspenvs
+import graspenvs.utils as utils
 import gymnasium
 import graspagents
 
@@ -40,36 +41,41 @@ def test_env_v1():
 
 def test_env_v2_and_v3():
     # agent = graspagents.GraspAgent_dl({'env': 'GraspEnv_v3', 'model': 'Transnet'})
-    agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
-    # agent = graspagents.GraspAgent_rl({'env': 'GraspEnv_v3', 'model': 'SAC'})
-    env = gymnasium.make(id='GraspEnv_v3', render_mode='rgb_array')
-    num_tasks, num_trials = 100, 1
+    # agent = graspagents.GraspAgent_bayes({'env': 'GraspEnv_v3'})
+    agent = graspagents.GraspAgent_rl({'env': 'GraspEnv_v3', 'model': 'SAC'})
+    num_tasks, num_trials = 1000, 1
     attempts, returns, success = np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials)), np.zeros((num_tasks * num_trials))
     w = []
     video_writer = cv2.VideoWriter(filename='video.mp4', fourcc=cv2.VideoWriter_fourcc(*'XVID'), fps=5, frameSize=(500, 500))
     for i in range(num_tasks):
         while True:
-            env.reset()
-            contour, convex = env.state['contour'].copy(), env.state['convex'].copy()
+            contour, convex = utils.generate_contour()
             agent.reset(contour, convex)
             if agent.env.state['candidate_actions'].shape[0] > 0:
                 break
         for j in range(num_trials):
-            env.state['attempt'], env.state['history'] = 0, np.zeros((env.max_steps, 4))
             agent.env.state['attempt'], agent.env.state['history'] = 0, np.zeros((agent.env.max_steps, 4))
             while True:
                 # 随机选择一个动作
-                # action = env.state['candidate_actions'][np.random.randint(0, len(env.state['candidate_actions']))]
+                # action = agent.env.state['candidate_actions'][np.random.randint(0, len(agent.env.state['candidate_actions']))]
                 action = agent.choose_action()[0]
-                next_observation, reward, done, truncated, info = env.step(action)
-                agent.update(action, env.state['history'][env.state['attempt'] - 1, -1])
-                frame = env.render()  # 获取渲染帧
+                # print(f'Action: {action}')
+                # print(f'mu: {agent.mu}')
+                # print(agent.sigma)
+                next_observation, reward, done, truncated, info = agent.env.step(action)
+                returns[num_trials * i + j] += reward
+                agent.env.state['attempt'] -= 1
+                agent.update(action, agent.env.state['history'][agent.env.state['attempt'], -1])
+                frame = agent.env.render()  # 获取渲染帧
+                # save the frame
+                cv2.imwrite(f'./frames/{i}_{j}_{agent.env.state["attempt"]}.png', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+                # env.compute_force(action)
                 # 将帧写入视频文件
                 video_writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                 if done or truncated:
-                    attempts[num_trials * i + j] = env.state['attempt']
+                    attempts[num_trials * i + j] = agent.env.state['attempt']
                     success[num_trials * i + j] = done and not truncated
-                    print(f'Task {i + 1}, Trial {j + 1}, Attempts: {env.state["attempt"]}, Success: {done and not truncated}')
+                    print(f'Task {i + 1}, Trial {j + 1}, Attempts: {agent.env.state["attempt"]}, Success: {done and not truncated}')
                     break
             # if done and not truncated:
             #     w.append(agent.scores)    

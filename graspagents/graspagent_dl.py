@@ -26,9 +26,9 @@ class GraspAgent_dl:
         with torch.no_grad():
             output = self.model(observations, candidate_actions)
         scores = output.squeeze().cpu().numpy()
-        self.scores = scores
+        self.scores = np.clip(scores, 0, 1)
         
-        return scores
+        return np.clip(scores, 0, 1)
     
     def choose_action(self, num_topk=100):
         scores = self.calculate_scores()
@@ -36,7 +36,7 @@ class GraspAgent_dl:
         topk_probs = scores[topk] / np.sum(scores[topk])
         action = self.env.state['candidate_actions'][np.random.choice(topk, p=topk_probs)]
 
-        return action
+        return [action]
 
     def update(self, action, force):
         self.env.state['history'][self.env.state['attempt']] = np.array([action[0], action[1], action[2], force])

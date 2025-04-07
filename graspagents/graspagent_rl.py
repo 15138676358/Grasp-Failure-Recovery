@@ -22,6 +22,7 @@ import torch.nn as nn
 class GraspAgent_rl:
     def __init__(self, config):
         self.env = gymnasium.make(id=config['env'], render_mode='rgb_array')
+        self.env.reset()  # 这里的reset只是为了初始化环境，生成的contour会被下一行覆盖
         self.model = load_model(self.env, config)
     
     def choose_action(self):
@@ -33,9 +34,9 @@ class GraspAgent_rl:
     def update(self, action, force):
         self.env.state['history'][self.env.state['attempt']] = np.array([action[0], action[1], action[2], force])
         self.env.state['attempt'] += 1
+        self.env.state['scores'] = np.zeros((self.env.state['candidate_actions'].shape[0], ))
 
     def reset(self, contour, convex):
-        self.env.reset()  # 这里的reset只是为了初始化环境，生成的contour会被下一行覆盖
         self.env.initialize_state(contour, convex)
 
 class GraspPPOPolicy(PPOPolicy):
